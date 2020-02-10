@@ -1,5 +1,5 @@
 # REDcapTasteSensitivity_Analyses
-Analysis provided in the "Perceived intensity of bitter and sweet taste reflects the proposed role of taste receptors in innate immunity and chronic rhinosinusitis" manuscript
+Analysis provided in the "Divergent bitter and sweet taste perception intensity in chronic rhinosinusitis patients" manuscript
 
 This repository is meant to provide the source code for the analysis provided in the above manuscript by Cailu Lin, Alyssa Civantos, Monique Arnold, Elizabeth Stevens, Beverly J. Cowart, Lauren Colquitt, Corrine Mansfield, Danielle R. Reed, David W. Kennedy, Steve G. Brooks, Alan D. Workman2, Mariel T. Blasetti, Michael A. Kohanski, Laurel Doghramji, Jennifer Douglas, Ivy Maina, James N. Palmer, Nithin D. Adappa and Noam A. Cohen
 
