@@ -2286,14 +2286,15 @@ forgraph_all$control <- as.numeric(forgraph_all$control)
 forgraph_all<- forgraph_all %>% mutate(control = dplyr::recode(control, "1" = "Control", "0" = "Case"))
 
 box_all <- ggplot(forgraph_all, aes(T2R38, PTC1)) + 
-      geom_boxplot(aes(linetype=control), outlier.color = "black", outlier.size = 0.2, outlier.alpha = 0.5) +
+      geom_boxplot(aes(color=control), outlier.color = "black", outlier.size = 0.2, outlier.alpha = 0.5) +
       facet_wrap(~dat) + 
       xlab("TAS2R38 diplotype")+
       ylab("PTC Taste Score") +
       ylim(0,10) + 
       theme(axis.text.x = element_text(angle=-45, hjust = 0))+
       labs(color="") +
-      theme(panel.background = element_rect(fill = 'white', color = 'white'), axis.line=element_line(size = 0.5, color = "black"), strip.background = element_rect(fill ="white", color = "white"), strip.text.x = element_text(size = 12, face = "bold"), legend.position = c(0.065, 0.95))
+      theme(panel.background = element_rect(fill = 'white', color = 'white'), axis.line=element_line(size = 0.5, color = "black"), strip.background = element_rect(fill ="white", color = "white"), strip.text.x = element_text(size = 12, face = "bold"), legend.position = c(0.065, 0.95))+scale_color_manual(values=c("black","#999999"))
+
 
 text_forgraph <- data.frame(
   label = c( "p=0.717","p=0.002", "p=0.492", "p=0.050", "p=0.248", "p=0.003"),
