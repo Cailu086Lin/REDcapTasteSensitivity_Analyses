@@ -1,0 +1,2686 @@
+---
+title: "REDcap_CRS_Taste_Analyses"
+author: "Cailu Lin"
+date: "Dec 11, 2019"
+output:
+  html_document: 
+    toc: yes
+---
+
+## R Markdown
+
+When you click the **Knit** (⇧⌘K) button a document will be generated that includes the output in the document. 
+
+$\color{red}{\text{Generally, highlighted rows are those mentioned in manuscript.}}$
+```{r setup, include=FALSE}
+require(knitr)
+knitr::opts_chunk$set(echo = TRUE)
+mydirectory<-"C:/Users/clin/Dropbox/REDCap/3.Resubmit/data/dat"
+knitr::opts_knit$set(root.dir = mydirectory)
+
+# Clear existing data and graphics
+rm(list = ls())
+graphics.off()
+
+# Load  library
+pacman::p_load(readxl, plyr, dplyr, mice, knitr, magrittr, tableone, reshape, kableExtra, broom, stringr, rgenoud, tidyverse, Hmisc, uwIntroStats, ggpubr, epitools, survey, lubridate, HardyWeinberg, stringr, data.table, effectsize, lsr, MBESS)
+```
+
+
+```{r formatting, echo=FALSE}
+
+#####FOR PRINTING TABLES LATER - MA to check
+# Print with n digits of precision
+fixed_digits <- function(xs, n = 2) {
+  formatC(xs, digits = n, format = "f")
+}
+
+# Print three digits of a p-value, but use
+# the "< .001" notation on tiny values.
+format_pval <- function(ps, html = FALSE) {
+  tiny <- ifelse(html, "&lt;&nbsp;.001", "< .001")
+  ps_chr <- ps %>% fixed_digits(3)
+  ps_chr[ps < 0.001] <- tiny
+  ps_chr
+}
+fix_names <- . %>%
+  str_replace(".Intercept.", "Intercept")
+  
+
+two_digits <- . %>% fixed_digits(4)
+table_names <- c("Compound", "Estimate", "SE",
+                 "t", "p")
+
+format_model_table <- . %>%
+  mutate_each(funs(two_digits),
+              -term, -p.value) %>%
+  mutate(term = fix_names(term),
+         p.value = format_pval(p.value)) %>%
+  set_colnames(table_names)
+
+```
+
+```{r inputs, include=FALSE, echo=FALSE}
+
+# Read Base Data
+data <- read.csv("Protocol800614Pathog_DATA_2019-10-31_1332_Civantos after review.csv")
+
+var_data <- data %>% summary.default %>% as.data.frame %>% 
+  dplyr::group_by(Var1) %>%  tidyr::spread(key = Var2, value = Freq)
+```
+
+```{r levels, include=FALSE, echo=FALSE}
+#Setting Labels
+label(data$number_id)="Log ID"
+label(data$t2r38)="T2R38"
+label(data$sf_12_pre)="Has Patient Filled Out a Pre-Op SF-12?"
+label(data$taste_test_subjects)="Add to Taste Test Subjects Report"
+label(data$saliva_report)="Add to Saliva Test Report"
+label(data$sniffin_report)="Add to Post-Op Sniffin Stick Report"
+label(data$test_date)="Saliva Test Date"
+label(data$taste_test_date)="Taste Test Date"
+label(data$sniffin_date)="Post Op Sniffin Stick test Date"
+label(data$po_sniffin_sticks_complete)="Post Op Sniffin Sticks Completed?"
+label(data$taste_complete)="Taste Test Completed?"
+label(data$saliva)="Saliva Test Complete?"
+label(data$genotypeavail)="Has patient been given a genotype?"
+label(data$ro1_grant)="Is Patient Part of the RO1 Grant Study?"
+label(data$next_appointment)="Next Appointment "
+label(data$ip_study)="Is Patient Part of the Inverted Papilloma?"
+label(data$microbiome)="Is Patient in the Microbiome study?"
+label(data$olfactory)="Is Patient in the Olfactory Rehab Study"
+label(data$meera)="Is Patient in Meeras Study?"
+label(data$midland)="Is Patient in Joe Midland Study?"
+label(data$r21)="Is Patient in the R21 Grant Study?"
+label(data$cf_study)="Is Patient in the CF Study?"
+label(data$cytokines)="Is Patient in the Cytokines Study?"
+label(data$single_sinus)="Is patient in Single Sinus Study?"
+label(data$gottfried)="Is patient in Gottfried Study?"
+label(data$sponge_baseline)="Sponge collected at baseline?"
+label(data$second_taste)="Second taste test?"
+label(data$mrn)="MRN"
+label(data$tissue)="Tissue ID"
+label(data$biofilm)="Biofilm ID"
+label(data$first_name)="First Name"
+label(data$last_name)="Last Name"
+label(data$dob)="DOB"
+label(data$gender)="Gender"
+label(data$ethnicity)="Ethnicity"
+label(data$new_race)="New Race"
+label(data$race)="Race"
+label(data$bmi)="BMI (at date of surgery)"
+label(data$age_consent)="Age at Consent"
+label(data$site)="Site"
+label(data$side)="Side"
+label(data$patient_dx)="Patient Dx"
+label(data$control)="Control Tissue?"
+label(data$dos)="DOS"
+label(data$consent_hippa)="HIPPA Consent"
+label(data$icf_date)="Date signed 5-Year Follow up ICF HIPPA"
+label(data$consents___1)="Consent Yes (choice=Hair)"
+label(data$consents___2)="Consent Yes (choice=Blood)"
+label(data$consents___3)="Consent Yes (choice=Taste Test)"
+label(data$consents___4)="Consent Yes (choice=Monell Forms)"
+label(data$consents___5)="Consent Yes (choice=Chart Data)"
+label(data$consents___6)="Consent Yes (choice=Sponges)"
+label(data$consents___7)="Consent Yes (choice=Saliva)"
+label(data$consents___8)="Consent Yes (choice=Tissue)"
+label(data$consents___9)="Consent Yes (choice=Culture)"
+label(data$consents___10)="Consent Yes (choice=5-Year Follow-up)"
+label(data$consents___11)="Consent Yes (choice=Olfactory Game)"
+label(data$date_tissue_collected)="Date Tissue Collected"
+label(data$date_taste_taking)="Date of Taste Taking"
+label(data$date_blood)="Date Blood Collected"
+label(data$date_hair)="Date Hair Collected"
+label(data$date_sponges)="Date Sponges Collected"
+label(data$one_month_sponge)="1-month sponge"
+label(data$three_month_sponge)="3 month sponge"
+label(data$date_saliva)="Date Saliva Collected"
+label(data$sf_12)="Date SF-12 Completed"
+label(data$sniffin)="Date Pre-Tx Sniffin Sticks completed"
+label(data$post_tx_sniffin)="Date Post-Tx Sniffin Sticks Completed"
+label(data$date_culture)="Date Culture Collected"
+label(data$micro_date)="Date Microbiome Culture collected"
+label(data$rna_later)="Date Tissue Collected for Midland-RNS Later"
+label(data$microbiome_follow)="Date Culture was taken for Microbiome study 1 year Follow up visit"
+label(data$meera_collected)="Date Tissue collected for Meera"
+label(data$r21_grant)="Date Tissue Collected for R21 Grant Study"
+label(data$email)="Email Address collected"
+label(data$culture_results)="Culture Results"
+label(data$or_data)="OR Data"
+label(data$surgeon)="Surgeon"
+label(data$number_prior_fess)="# of Prior FESS"
+label(data$date_prior_fess)="Date of last FESS"
+label(data$number_revision_fess)="# of Revision FESS"
+label(data$polyps)="Polyps"
+label(data$baseline_snot)="Baseline SNOT and Date"
+label(data$onemonth_snot)="1 Month SNOT "
+label(data$threemonth_snot)="3 Month SNOT"
+label(data$sixmonth_snot)="6 Month SNOT"
+label(data$twelvemonth_snot)="12 Month SNOT"
+label(data$pre_upsit)="Pre UPSIT"
+label(data$post_upsit)="Post UPSIT"
+label(data$odor_date_pre)="Odor Test Date Pre"
+label(data$pre_sniffin)="Pre Sniffin Sticks"
+label(data$odor_pre___1)="Odor Test Results Pre (choice=Orange)"
+label(data$odor_pre___2)="Odor Test Results Pre (choice=Leather)"
+label(data$odor_pre___3)="Odor Test Results Pre (choice=Cinnamon)"
+label(data$odor_pre___4)="Odor Test Results Pre (choice=Peppermint)"
+label(data$odor_pre___5)="Odor Test Results Pre (choice=Banana)"
+label(data$odor_pre___6)="Odor Test Results Pre (choice=Lemon)"
+label(data$odor_pre___7)="Odor Test Results Pre (choice=Licorice)"
+label(data$odor_pre___8)="Odor Test Results Pre (choice=Coffee)"
+label(data$odor_pre___9)="Odor Test Results Pre (choice=Clove)"
+label(data$odor_pre___10)="Odor Test Results Pre (choice=Pineapple)"
+label(data$odor_pre___11)="Odor Test Results Pre (choice=Rose)"
+label(data$odor_pre___12)="Odor Test Results Pre (choice=Fish)"
+label(data$odor_date_post)="Odor Test Date Post"
+label(data$post_sniffin)="Post Sniffin Sticks  "
+label(data$odor_post___1)="Odor Test Results Post (choice=Orange)"
+label(data$odor_post___2)="Odor Test Results Post (choice=Leather)"
+label(data$odor_post___3)="Odor Test Results Post (choice=Cinnamon)"
+label(data$odor_post___4)="Odor Test Results Post (choice=Peppermint)"
+label(data$odor_post___5)="Odor Test Results Post (choice=Banana)"
+label(data$odor_post___6)="Odor Test Results Post (choice=Lemon)"
+label(data$odor_post___7)="Odor Test Results Post (choice=Licorice)"
+label(data$odor_post___8)="Odor Test Results Post (choice=Coffee)"
+label(data$odor_post___9)="Odor Test Results Post (choice=Clove)"
+label(data$odor_post___10)="Odor Test Results Post (choice=Pineapple)"
+label(data$odor_post___11)="Odor Test Results Post (choice=Rose)"
+label(data$odor_post___12)="Odor Test Results Post (choice=Fish)"
+label(data$video_ct_scan)="Video/CT Scan"
+label(data$lund_mckay)="Lund-McKay"
+label(data$followup_ct_scan)="Follow up CT scan"
+label(data$active_tobacco)="Active Tobacco"
+label(data$inactive_tobacco)="Inactive Tobacco"
+label(data$continine_levels)="Continine Levels"
+label(data$hair_nicotine)="Hair Nicotine "
+label(data$comorbids)="Co-Morbids"
+label(data$co_morbid___1)="Co-morbidities (choice=Asthma)"
+label(data$co_morbid___2)="Co-morbidities (choice=Immunocompromised/Autoimmune)"
+label(data$co_morbid___3)="Co-morbidities (choice=Immunotherapy)"
+label(data$co_morbid___4)="Co-morbidities (choice=ASA sensitive)"
+label(data$co_morbid___16)="Co-morbidities (choice=ASA desensitized)"
+label(data$co_morbid___5)="Co-morbidities (choice=AFS (allergic fungal sinusitis))"
+label(data$co_morbid___6)="Co-morbidities (choice=Cystic Fibrosis)"
+label(data$co_morbid___7)="Co-morbidities (choice=GERD)"
+label(data$co_morbid___8)="Co-morbidities (choice=HTN)"
+label(data$co_morbid___9)="Co-morbidities (choice=Hyperlipidemia)"
+label(data$co_morbid___10)="Co-morbidities (choice=Sinonasal trauma)"
+label(data$co_morbid___11)="Co-morbidities (choice=Polyps)"
+label(data$co_morbid___12)="Co-morbidities (choice=Samsters Triad (AERD))"
+label(data$co_morbid___13)="Co-morbidities (choice=DM)"
+label(data$co_morbid___14)="Co-morbidities (choice=OSA)"
+label(data$co_morbid___15)="Co-morbidities (choice=Other)"
+label(data$asa_desensitization_date)="Date of ASA Desensitization"
+label(data$co_morbid_other)="Co-morbidities (other)"
+label(data$ars)="Allergic Rhinosinusitis symptoms"
+label(data$ars_symptoms)="Tested positive for allergies"
+label(data$presurgery_st_abx)="Pre-Surgery Steroids & Antibiotics"
+label(data$withdrew)="W/D"
+label(data$second_surgery)="Second Surgery"
+label(data$patient_data_complete)="Complete?"
+label(data$date)="Date Microbiome Collected"
+label(data$what___0)="What was collected? (choice=A - Nasal Vestibule Swab)"
+label(data$what___1)="What was collected? (choice=B - Head of Inferior Turbinate Tissue Biopsy)"
+label(data$what___2)="What was collected? (choice=C - Middle Meatus Swab)"
+label(data$what___3)="What was collected? (choice=D - Uncinate Process Tissue Biopsy)"
+label(data$what___4)="What was collected? (choice=E - Maxillary Sinus Swab)"
+label(data$what___5)="What was collected? (choice=F - Maxillary Sinus Tissue Biopsy)"
+label(data$what___6)="What was collected? (choice=G - Ethmoid Culture (Deep to Ethmoid Bulla))"
+label(data$what___7)="What was collected? (choice=H - Ethmoid Tissue Biopsy (Deep to Ethmoid Bulla))"
+label(data$what___8)="What was collected? (choice=I - Superior Meatus Swab)"
+label(data$what___9)="What was collected? (choice=J - Sphenoethmoidal Recess Tissue Biopsy)"
+label(data$what___10)="What was collected? (choice=K - Sphenoid Swab)"
+label(data$what___11)="What was collected? (choice=L -  Sphenoid Tissue Biopsy)"
+label(data$what___12)="What was collected? (choice=M - Frontal Swab)"
+label(data$what___13)="What was collected? (choice=N - Other)"
+label(data$what___14)="What was collected? (choice=O - Pan Sinus Swab)"
+label(data$what___15)="What was collected? (choice=Q - Miscellaneous (biofilms etc))"
+label(data$other_site)=""
+label(data$details_0___1)="Details about Nasal Vestibule Swab (choice=Right)"
+label(data$details_0___2)="Details about Nasal Vestibule Swab (choice=Left)"
+label(data$details_0___3)="Details about Nasal Vestibule Swab (choice=Normal)"
+label(data$details_0___4)="Details about Nasal Vestibule Swab (choice=Mucopurulence)"
+label(data$details_0___5)="Details about Nasal Vestibule Swab (choice=Edema)"
+label(data$details_0___6)="Details about Nasal Vestibule Swab (choice=Polyp)"
+label(data$details_2___1)="Details about Middle Meatus Swab (choice=Right)"
+label(data$details_2___2)="Details about Middle Meatus Swab (choice=Left)"
+label(data$details_2___3)="Details about Middle Meatus Swab (choice=Normal)"
+label(data$details_2___4)="Details about Middle Meatus Swab (choice=Mucopurulence)"
+label(data$details_2___5)="Details about Middle Meatus Swab (choice=Edema)"
+label(data$details_2___6)="Details about Middle Meatus Swab (choice=Polyp)"
+label(data$details_4___1)="Details about Maxillary Sinus Swab (choice=Right)"
+label(data$details_4___2)="Details about Maxillary Sinus Swab (choice=Left)"
+label(data$details_4___3)="Details about Maxillary Sinus Swab (choice=Normal)"
+label(data$details_4___4)="Details about Maxillary Sinus Swab (choice=Mucopurulence)"
+label(data$details_4___5)="Details about Maxillary Sinus Swab (choice=Edema)"
+label(data$details_4___6)="Details about Maxillary Sinus Swab (choice=Polyp)"
+label(data$details_6___1)="Details about Ethmoid Culture (Deep to Ethmoid Bulla) Swab (choice=Right)"
+label(data$details_6___2)="Details about Ethmoid Culture (Deep to Ethmoid Bulla) Swab (choice=Left)"
+label(data$details_6___3)="Details about Ethmoid Culture (Deep to Ethmoid Bulla) Swab (choice=Normal)"
+label(data$details_6___4)="Details about Ethmoid Culture (Deep to Ethmoid Bulla) Swab (choice=Mucopurulence)"
+label(data$details_6___5)="Details about Ethmoid Culture (Deep to Ethmoid Bulla) Swab (choice=Edema)"
+label(data$details_6___6)="Details about Ethmoid Culture (Deep to Ethmoid Bulla) Swab (choice=Polyp)"
+label(data$details_8___1)="Details about Superior Meatus Swab (choice=Right)"
+label(data$details_8___2)="Details about Superior Meatus Swab (choice=Left)"
+label(data$details_8___3)="Details about Superior Meatus Swab (choice=Normal)"
+label(data$details_8___4)="Details about Superior Meatus Swab (choice=Mucopurulence)"
+label(data$details_8___5)="Details about Superior Meatus Swab (choice=Edema)"
+label(data$details_8___6)="Details about Superior Meatus Swab (choice=Polyp)"
+label(data$details_10___1)="Details about Sphenoid Swab (choice=Right)"
+label(data$details_10___2)="Details about Sphenoid Swab (choice=Left)"
+label(data$details_10___3)="Details about Sphenoid Swab (choice=Normal)"
+label(data$details_10___4)="Details about Sphenoid Swab (choice=Mucopurulence)"
+label(data$details_10___5)="Details about Sphenoid Swab (choice=Edema)"
+label(data$details_10___6)="Details about Sphenoid Swab (choice=Polyp)"
+label(data$details_12___1)="Details about Frontal Swab (choice=Right)"
+label(data$details_12___2)="Details about Frontal Swab (choice=Left)"
+label(data$details_12___3)="Details about Frontal Swab (choice=Normal)"
+label(data$details_12___4)="Details about Frontal Swab (choice=Mucopurulence)"
+label(data$details_12___5)="Details about Frontal Swab (choice=Edema)"
+label(data$details_12___6)="Details about Frontal Swab (choice=Polyp)"
+label(data$details_13___1)="Details about Other Swab (choice=Right)"
+label(data$details_13___2)="Details about Other Swab (choice=Left)"
+label(data$details_13___3)="Details about Other Swab (choice=Normal)"
+label(data$details_13___4)="Details about Other Swab (choice=Mucopurulence)"
+label(data$details_13___5)="Details about Other Swab (choice=Edema)"
+label(data$details_13___6)="Details about Other Swab (choice=Polyp)"
+label(data$details_14___1)="Details about Pan Sinus Swab (choice=Right)"
+label(data$details_14___2)="Details about Pan Sinus Swab (choice=Left)"
+label(data$details_14___3)="Details about Pan Sinus Swab (choice=Normal)"
+label(data$details_14___4)="Details about Pan Sinus Swab (choice=Mucopurulence)"
+label(data$details_14___5)="Details about Pan Sinus Swab (choice=Edema)"
+label(data$details_14___6)="Details about Pan Sinus Swab (choice=Polyp)"
+label(data$microbiome_data_complete)="Complete?"
+label(data$date_post)="Date Microbiome Collected"
+label(data$what_post___0)="What was collected? (choice=A - Nasal Vestibule Swab)"
+label(data$what_post___1)="What was collected? (choice=B - Head of Inferior Turbinate Tissue Biopsy)"
+label(data$what_post___2)="What was collected? (choice=C - Middle Meatus Swab)"
+label(data$what_post___3)="What was collected? (choice=D - Uncinate Process Tissue Biopsy)"
+label(data$what_post___4)="What was collected? (choice=E - Maxillary Sinus Swab)"
+label(data$what_post___5)="What was collected? (choice=F - Maxillary Sinus Tissue Biopsy)"
+label(data$what_post___6)="What was collected? (choice=G - Ethmoid Culture (Deep to Ethmoid Bulla))"
+label(data$what_post___7)="What was collected? (choice=H - Ethmoid Tissue Biopsy (Deep to Ethmoid Bulla))"
+label(data$what_post___8)="What was collected? (choice=I - Superior Meatus Swab)"
+label(data$what_post___9)="What was collected? (choice=J - Sphenoethmoidal Recess Tissue Biopsy)"
+label(data$what_post___10)="What was collected? (choice=K - Sphenoid Swab)"
+label(data$what_post___11)="What was collected? (choice=L -  Sphenoid Tissue Biopsy)"
+label(data$what_post___12)="What was collected? (choice=M - Frontal Swab)"
+label(data$what_post___13)="What was collected? (choice=N - Other)"
+label(data$what_post___14)="What was collected? (choice=O - Pan Sinus Swab)"
+label(data$what_post___15)="What was collected? (choice=Q - Miscellaneous (biofilms etc))"
+label(data$details_0_post___1)="Details about Nasal Vestibule Swab (choice=Right)"
+label(data$details_0_post___2)="Details about Nasal Vestibule Swab (choice=Left)"
+label(data$details_0_post___3)="Details about Nasal Vestibule Swab (choice=Normal)"
+label(data$details_0_post___4)="Details about Nasal Vestibule Swab (choice=Mucopurulence)"
+label(data$details_0_post___5)="Details about Nasal Vestibule Swab (choice=Edema)"
+label(data$details_0_post___6)="Details about Nasal Vestibule Swab (choice=Polyp)"
+label(data$details_2_post___1)="Details about Middle Meatus Swab (choice=Right)"
+label(data$details_2_post___2)="Details about Middle Meatus Swab (choice=Left)"
+label(data$details_2_post___3)="Details about Middle Meatus Swab (choice=Normal)"
+label(data$details_2_post___4)="Details about Middle Meatus Swab (choice=Mucopurulence)"
+label(data$details_2_post___5)="Details about Middle Meatus Swab (choice=Edema)"
+label(data$details_2_post___6)="Details about Middle Meatus Swab (choice=Polyp)"
+label(data$details_4_post___1)="Details about Maxillary Sinus Swab (choice=Right)"
+label(data$details_4_post___2)="Details about Maxillary Sinus Swab (choice=Left)"
+label(data$details_4_post___3)="Details about Maxillary Sinus Swab (choice=Normal)"
+label(data$details_4_post___4)="Details about Maxillary Sinus Swab (choice=Mucopurulence)"
+label(data$details_4_post___5)="Details about Maxillary Sinus Swab (choice=Edema)"
+label(data$details_4_post___6)="Details about Maxillary Sinus Swab (choice=Polyp)"
+label(data$details_6_post___1)="Details about Ethmoid Culture (Deep to Ethmoid Bulla) Swab (choice=Right)"
+label(data$details_6_post___2)="Details about Ethmoid Culture (Deep to Ethmoid Bulla) Swab (choice=Left)"
+label(data$details_6_post___3)="Details about Ethmoid Culture (Deep to Ethmoid Bulla) Swab (choice=Normal)"
+label(data$details_6_post___4)="Details about Ethmoid Culture (Deep to Ethmoid Bulla) Swab (choice=Mucopurulence)"
+label(data$details_6_post___5)="Details about Ethmoid Culture (Deep to Ethmoid Bulla) Swab (choice=Edema)"
+label(data$details_6_post___6)="Details about Ethmoid Culture (Deep to Ethmoid Bulla) Swab (choice=Polyp)"
+label(data$details_8_post___1)="Details about Superior Meatus Swab (choice=Right)"
+label(data$details_8_post___2)="Details about Superior Meatus Swab (choice=Left)"
+label(data$details_8_post___3)="Details about Superior Meatus Swab (choice=Normal)"
+label(data$details_8_post___4)="Details about Superior Meatus Swab (choice=Mucopurulence)"
+label(data$details_8_post___5)="Details about Superior Meatus Swab (choice=Edema)"
+label(data$details_8_post___6)="Details about Superior Meatus Swab (choice=Polyp)"
+label(data$details_10_post___1)="Details about Sphenoid Swab (choice=Right)"
+label(data$details_10_post___2)="Details about Sphenoid Swab (choice=Left)"
+label(data$details_10_post___3)="Details about Sphenoid Swab (choice=Normal)"
+label(data$details_10_post___4)="Details about Sphenoid Swab (choice=Mucopurulence)"
+label(data$details_10_post___5)="Details about Sphenoid Swab (choice=Edema)"
+label(data$details_10_post___6)="Details about Sphenoid Swab (choice=Polyp)"
+label(data$details_12_post___1)="Details about Frontal Swab (choice=Right)"
+label(data$details_12_post___2)="Details about Frontal Swab (choice=Left)"
+label(data$details_12_post___3)="Details about Frontal Swab (choice=Normal)"
+label(data$details_12_post___4)="Details about Frontal Swab (choice=Mucopurulence)"
+label(data$details_12_post___5)="Details about Frontal Swab (choice=Edema)"
+label(data$details_12_post___6)="Details about Frontal Swab (choice=Polyp)"
+label(data$details_13_post___1)="Details about Other Swab (choice=Right)"
+label(data$details_13_post___2)="Details about Other Swab (choice=Left)"
+label(data$details_13_post___3)="Details about Other Swab (choice=Normal)"
+label(data$details_13_post___4)="Details about Other Swab (choice=Mucopurulence)"
+label(data$details_13_post___5)="Details about Other Swab (choice=Edema)"
+label(data$details_13_post___6)="Details about Other Swab (choice=Polyp)"
+label(data$details_14_post___1)="Details about Pan Sinus Swab (choice=Right)"
+label(data$details_14_post___2)="Details about Pan Sinus Swab (choice=Left)"
+label(data$details_14_post___3)="Details about Pan Sinus Swab (choice=Normal)"
+label(data$details_14_post___4)="Details about Pan Sinus Swab (choice=Mucopurulence)"
+label(data$details_14_post___5)="Details about Pan Sinus Swab (choice=Edema)"
+label(data$details_14_post___6)="Details about Pan Sinus Swab (choice=Polyp)"
+label(data$follow_up_microbiome_data_complete)="Complete?"
+label(data$date_pre_op)="Date"
+label(data$need_to_blow_nose)="Need to blow nose"
+label(data$sneezing)="Sneezing"
+label(data$runny_nose)="Runny nose"
+label(data$nasal_obstruction)="Nasal obstruction"
+label(data$loss_of_smell_or_taste)="Loss of smell or taste"
+label(data$cough)="Cough"
+label(data$post_nasal_discharge)="Post-nasal discharge"
+label(data$thick_nasal_discharge)="Thick nasal discharge"
+label(data$ear_fullness)="Ear fullness"
+label(data$dizziness)="Dizziness"
+label(data$ear_pain)="Ear pain"
+label(data$facial_pain_pressure)="Facial pain/pressure"
+label(data$difficulty)="Difficulty falling asleep"
+label(data$wake_up_at_night)="Wake up at night"
+label(data$lack)="Lack of a good nights sleep"
+label(data$wake_up_tired)="Wake up tired"
+label(data$fatigue)="Fatigue"
+label(data$reduced_productivity)="Reduced_productivity"
+label(data$reduced_concentration)="Reduced_concentration"
+label(data$frustrated)="Frustrated/restless/irritable"
+label(data$sad)="Sad"
+label(data$embarrassed)="Embarrassed"
+label(data$total_pre_op)="Total Pre Op"
+label(data$preop_snot_complete)="Complete?"
+label(data$date_post_op_1mo)="Date"
+label(data$need_to_blow_nose_1mo)="Need to blow nose"
+label(data$sneezing_1mo)="Sneezing"
+label(data$runny_nose_1mo)="Runny nose"
+label(data$nasal_obstruction_1mo)="Nasal obstruction"
+label(data$loss_of_smell_or_taste_1mo)="Loss of smell or taste"
+label(data$cough_1mo)="Cough"
+label(data$post_nasal_discharge_1mo)="Post-nasal discharge"
+label(data$thick_nasal_discharge_1mo)="Thick nasal discharge"
+label(data$ear_fullness_1mo)="Ear fullness"
+label(data$dizziness_1mo)="Dizziness"
+label(data$ear_pain_1mo)="Ear pain"
+label(data$facial_pain_pressure_1mo)="Facial pain/pressure"
+label(data$difficulty_1mo)="Difficulty falling asleep"
+label(data$wake_up_at_night_1mo)="Wake up at night"
+label(data$lack_1mo)="Lack of a good nights sleep"
+label(data$wake_up_tired_1mo)="Wake up tired"
+label(data$fatigue_1mo)="Fatigue"
+label(data$reduced_productivity_1mo)="Reduced_productivity"
+label(data$reduced_concentration_1mo)="Reduced_concentration"
+label(data$frustrated_1mo)="Frustrated/restless/irritable"
+label(data$sad_1mo)="Sad"
+label(data$embarrassed_1mo)="Embarrassed"
+label(data$total_pre_op_1mo)="Total Pre Op"
+label(data$postop_snot_1_month_complete)="Complete?"
+label(data$date_post_op_3mo)="Date"
+label(data$need_to_blow_nose_3mo)="Need to blow nose"
+label(data$sneezing_3mo)="Sneezing"
+label(data$runny_nose_3mo)="Runny nose"
+label(data$nasal_obstruction_3mo)="Nasal obstruction"
+label(data$loss_of_smell_or_taste_3mo)="Loss of smell or taste"
+label(data$cough_3mo)="Cough"
+label(data$post_nasal_discharge_3mo)="Post-nasal discharge"
+label(data$thick_nasal_discharge_3mo)="Thick nasal discharge"
+label(data$ear_fullness_3mo)="Ear fullness"
+label(data$dizziness_3mo)="Dizziness"
+label(data$ear_pain_3mo)="Ear pain"
+label(data$facial_pain_pressure_3mo)="Facial pain/pressure"
+label(data$difficulty_3mo)="Difficulty falling asleep"
+label(data$wake_up_at_night_3mo)="Wake up at night"
+label(data$lack_3mo)="Lack of a good nights sleep"
+label(data$wake_up_tired_3mo)="Wake up tired"
+label(data$fatigue_3mo)="Fatigue"
+label(data$reduced_productivity_3mo)="Reduced_productivity"
+label(data$reduced_concentration_3mo)="Reduced_concentration"
+label(data$frustrated_3mo)="Frustrated/restless/irritable"
+label(data$sad_3mo)="Sad"
+label(data$embarrassed_3mo)="Embarrassed"
+label(data$total_pre_op_3mo)="Total Pre Op"
+label(data$postop_snot_3_months_complete)="Complete?"
+label(data$date_post_op_6mo)="Date"
+label(data$need_to_blow_nose_6mo)="Need to blow nose"
+label(data$sneezing_6mo)="Sneezing"
+label(data$runny_nose_6mo)="Runny nose"
+label(data$nasal_obstruction_6mo)="Nasal obstruction"
+label(data$loss_of_smell_or_taste_6mo)="Loss of smell or taste"
+label(data$cough_6mo)="Cough"
+label(data$post_nasal_discharge_6mo)="Post-nasal discharge"
+label(data$thick_nasal_discharge_6mo)="Thick nasal discharge"
+label(data$ear_fullness_6mo)="Ear fullness"
+label(data$dizziness_6mo)="Dizziness"
+label(data$ear_pain_6mo)="Ear pain"
+label(data$facial_pain_pressure_6mo)="Facial pain/pressure"
+label(data$difficulty_6mo)="Difficulty falling asleep"
+label(data$wake_up_at_night_6mo)="Wake up at night"
+label(data$lack_6mo)="Lack of a good nights sleep"
+label(data$wake_up_tired_6mo)="Wake up tired"
+label(data$fatigue_6mo)="Fatigue"
+label(data$reduced_productivity_6mo)="Reduced_productivity"
+label(data$reduced_concentration_6mo)="Reduced_concentration"
+label(data$frustrated_6mo)="Frustrated/restless/irritable"
+label(data$sad_6mo)="Sad"
+label(data$embarrassed_6mo)="Embarrassed"
+label(data$total_pre_op_6mo)="Total Pre Op"
+label(data$postop_snot_6_months_complete)="Complete?"
+label(data$date_post_op_12mo)="Date"
+label(data$need_to_blow_nose_12mo)="Need to blow nose"
+label(data$sneezing_12mo)="Sneezing"
+label(data$runny_nose_12mo)="Runny nose"
+label(data$nasal_obstruction_12mo)="Nasal obstruction"
+label(data$loss_of_smell_or_taste_12mo)="Loss of smell or taste"
+label(data$cough_12mo)="Cough"
+label(data$post_nasal_discharge_12mo)="Post-nasal discharge"
+label(data$thick_nasal_discharge_12mo)="Thick nasal discharge"
+label(data$ear_fullness_12mo)="Ear fullness"
+label(data$dizziness_12mo)="Dizziness"
+label(data$ear_pain_12mo)="Ear pain"
+label(data$facial_pain_pressure_12mo)="Facial pain/pressure"
+label(data$difficulty_12mo)="Difficulty falling asleep"
+label(data$wake_up_at_night_12mo)="Wake up at night"
+label(data$lack_12mo)="Lack of a good nights sleep"
+label(data$wake_up_tired_12mo)="Wake up tired"
+label(data$fatigue_12mo)="Fatigue"
+label(data$reduced_productivity_12mo)="Reduced_productivity"
+label(data$reduced_concentration_12mo)="Reduced_concentration"
+label(data$frustrated_12mo)="Frustrated/restless/irritable"
+label(data$sad_12mo)="Sad"
+label(data$embarrassed_12mo)="Embarrassed"
+label(data$total_pre_op_12mo)="Total Pre Op"
+label(data$postop_snot_12_months_complete)="Complete?"
+label(data$two_dos)="2nd Surgery - DOS"
+label(data$procedure)="Procedure"
+label(data$prior_fess)="Number of Prior FESS"
+label(data$date_last_fess)="Date of Last FESS"
+label(data$revisions)="Number of Revisions (FESS)"
+label(data$surgeon_list)="Surgeon"
+label(data$pre_op_comorbids)="Pre-Op Comorbids"
+label(data$smoking_history___1)="Smoking History (choice=Never Smoker)"
+label(data$smoking_history___2)="Smoking History (choice=Occasional Smoker)"
+label(data$smoking_history___3)="Smoking History (choice=Current Everyday Smoker)"
+label(data$smoking_history___4)="Smoking History (choice=X-Smoker)"
+label(data$occasional_smoker_yes)="How many per week/month/year"
+label(data$occasional_smoker_years)="How many years?"
+label(data$xsmoker_quit)="Years Quit"
+label(data$smoker_howmany)="How many per day?"
+label(data$smoker_years)="How many years?"
+label(data$second_hand_smoke)="2nd hand smoke exposure"
+label(data$snot_22)="SNOT-22"
+label(data$ct_scan_date)="CT Scan Date"
+label(data$lund_mckay_score)="Lund-McKay Score"
+label(data$medications_surgery___1)="Medications at Time of Surgery (choice=Antibiotics)"
+label(data$medications_surgery___2)="Medications at Time of Surgery (choice=Oral Steroids)"
+label(data$medications_surgery___3)="Medications at Time of Surgery (choice=Antifungal)"
+label(data$medications_surgery___4)="Medications at Time of Surgery (choice=Nasal Steroids)"
+label(data$antibiotics_yes)="Antibiotics"
+label(data$oral_steroids_yes)="Oral Steroids"
+label(data$antifungal_yes)="Antifungal"
+label(data$nasal_steroids_yes)="Nasal Steroids"
+label(data$nasal_irrigations___1)="Nasal Irrigations (choice=Saline)"
+label(data$nasal_irrigations___2)="Nasal Irrigations (choice=Pulmicort)"
+label(data$nasal_irrigations___3)="Nasal Irrigations (choice=Bactroban)"
+label(data$nasal_irrigations___4)="Nasal Irrigations (choice=Baby Shampoo)"
+label(data$nasal_irrigations___5)="Nasal Irrigations (choice=Gentamicin)"
+label(data$second_surgery_complete)="Complete?"
+#Setting Units
+
+#Setting Factors(will create new variable for factors)
+data$t2r38.factor = factor(data$t2r38,levels=c("1","0"))
+data$sf_12_pre.factor = factor(data$sf_12_pre,levels=c("1","0"))
+data$taste_test_subjects.factor = factor(data$taste_test_subjects,levels=c("1","0"))
+data$saliva_report.factor = factor(data$saliva_report,levels=c("1","0"))
+data$sniffin_report.factor = factor(data$sniffin_report,levels=c("1","0"))
+data$po_sniffin_sticks_complete.factor = factor(data$po_sniffin_sticks_complete,levels=c("1","0"))
+data$taste_complete.factor = factor(data$taste_complete,levels=c("1","0"))
+data$saliva.factor = factor(data$saliva,levels=c("1","0"))
+data$genotypeavail.factor = factor(data$genotypeavail,levels=c("1","0"))
+data$ro1_grant.factor = factor(data$ro1_grant,levels=c("1","0"))
+data$ip_study.factor = factor(data$ip_study,levels=c("1","0"))
+data$microbiome.factor = factor(data$microbiome,levels=c("1","0"))
+data$olfactory.factor = factor(data$olfactory,levels=c("1","0"))
+data$meera.factor = factor(data$meera,levels=c("1","0"))
+data$midland.factor = factor(data$midland,levels=c("1","0"))
+data$r21.factor = factor(data$r21,levels=c("1","0"))
+data$cf_study.factor = factor(data$cf_study,levels=c("1","0"))
+data$cytokines.factor = factor(data$cytokines,levels=c("1","0"))
+data$single_sinus.factor = factor(data$single_sinus,levels=c("1","0"))
+data$gottfried.factor = factor(data$gottfried,levels=c("1","0"))
+data$sponge_baseline.factor = factor(data$sponge_baseline,levels=c("1","0"))
+data$second_taste.factor = factor(data$second_taste,levels=c("1","0"))
+data$gender.factor = factor(data$gender,levels=c("1","2"))
+data$ethnicity.factor = factor(data$ethnicity,levels=c("1","2"))
+data$new_race.factor = factor(data$new_race,levels=c("0","1","3","4","5"))
+data$race.factor = factor(data$race,levels=c("1","2","3","4","5","6"))
+data$control.factor = factor(data$control,levels=c("1","0"))
+data$consents___1.factor = factor(data$consents___1,levels=c("0","1"))
+data$consents___2.factor = factor(data$consents___2,levels=c("0","1"))
+data$consents___3.factor = factor(data$consents___3,levels=c("0","1"))
+data$consents___4.factor = factor(data$consents___4,levels=c("0","1"))
+data$consents___5.factor = factor(data$consents___5,levels=c("0","1"))
+data$consents___6.factor = factor(data$consents___6,levels=c("0","1"))
+data$consents___7.factor = factor(data$consents___7,levels=c("0","1"))
+data$consents___8.factor = factor(data$consents___8,levels=c("0","1"))
+data$consents___9.factor = factor(data$consents___9,levels=c("0","1"))
+data$consents___10.factor = factor(data$consents___10,levels=c("0","1"))
+data$consents___11.factor = factor(data$consents___11,levels=c("0","1"))
+data$email.factor = factor(data$email,levels=c("1","0"))
+data$or_data.factor = factor(data$or_data,levels=c("1","0"))
+data$surgeon.factor = factor(data$surgeon,levels=c("1","2","3","4","5","6","7","8"))
+data$polyps.factor = factor(data$polyps,levels=c("1","0"))
+data$odor_pre___1.factor = factor(data$odor_pre___1,levels=c("0","1"))
+data$odor_pre___2.factor = factor(data$odor_pre___2,levels=c("0","1"))
+data$odor_pre___3.factor = factor(data$odor_pre___3,levels=c("0","1"))
+data$odor_pre___4.factor = factor(data$odor_pre___4,levels=c("0","1"))
+data$odor_pre___5.factor = factor(data$odor_pre___5,levels=c("0","1"))
+data$odor_pre___6.factor = factor(data$odor_pre___6,levels=c("0","1"))
+data$odor_pre___7.factor = factor(data$odor_pre___7,levels=c("0","1"))
+data$odor_pre___8.factor = factor(data$odor_pre___8,levels=c("0","1"))
+data$odor_pre___9.factor = factor(data$odor_pre___9,levels=c("0","1"))
+data$odor_pre___10.factor = factor(data$odor_pre___10,levels=c("0","1"))
+data$odor_pre___11.factor = factor(data$odor_pre___11,levels=c("0","1"))
+data$odor_pre___12.factor = factor(data$odor_pre___12,levels=c("0","1"))
+data$odor_post___1.factor = factor(data$odor_post___1,levels=c("0","1"))
+data$odor_post___2.factor = factor(data$odor_post___2,levels=c("0","1"))
+data$odor_post___3.factor = factor(data$odor_post___3,levels=c("0","1"))
+data$odor_post___4.factor = factor(data$odor_post___4,levels=c("0","1"))
+data$odor_post___5.factor = factor(data$odor_post___5,levels=c("0","1"))
+data$odor_post___6.factor = factor(data$odor_post___6,levels=c("0","1"))
+data$odor_post___7.factor = factor(data$odor_post___7,levels=c("0","1"))
+data$odor_post___8.factor = factor(data$odor_post___8,levels=c("0","1"))
+data$odor_post___9.factor = factor(data$odor_post___9,levels=c("0","1"))
+data$odor_post___10.factor = factor(data$odor_post___10,levels=c("0","1"))
+data$odor_post___11.factor = factor(data$odor_post___11,levels=c("0","1"))
+data$odor_post___12.factor = factor(data$odor_post___12,levels=c("0","1"))
+data$co_morbid___1.factor = factor(data$co_morbid___1,levels=c("0","1"))
+data$co_morbid___2.factor = factor(data$co_morbid___2,levels=c("0","1"))
+data$co_morbid___3.factor = factor(data$co_morbid___3,levels=c("0","1"))
+data$co_morbid___4.factor = factor(data$co_morbid___4,levels=c("0","1"))
+data$co_morbid___16.factor = factor(data$co_morbid___16,levels=c("0","1"))
+data$co_morbid___5.factor = factor(data$co_morbid___5,levels=c("0","1"))
+data$co_morbid___6.factor = factor(data$co_morbid___6,levels=c("0","1"))
+data$co_morbid___7.factor = factor(data$co_morbid___7,levels=c("0","1"))
+data$co_morbid___8.factor = factor(data$co_morbid___8,levels=c("0","1"))
+data$co_morbid___9.factor = factor(data$co_morbid___9,levels=c("0","1"))
+data$co_morbid___10.factor = factor(data$co_morbid___10,levels=c("0","1"))
+data$co_morbid___11.factor = factor(data$co_morbid___11,levels=c("0","1"))
+data$co_morbid___12.factor = factor(data$co_morbid___12,levels=c("0","1"))
+data$co_morbid___13.factor = factor(data$co_morbid___13,levels=c("0","1"))
+data$co_morbid___14.factor = factor(data$co_morbid___14,levels=c("0","1"))
+data$co_morbid___15.factor = factor(data$co_morbid___15,levels=c("0","1"))
+data$ars.factor = factor(data$ars,levels=c("1","0"))
+data$ars_symptoms.factor = factor(data$ars_symptoms,levels=c("1","0"))
+data$withdrew.factor = factor(data$withdrew,levels=c("1","0"))
+data$second_surgery.factor = factor(data$second_surgery,levels=c("1","0"))
+data$patient_data_complete.factor = factor(data$patient_data_complete,levels=c("0","1","2"))
+data$what___0.factor = factor(data$what___0,levels=c("0","1"))
+data$what___1.factor = factor(data$what___1,levels=c("0","1"))
+data$what___2.factor = factor(data$what___2,levels=c("0","1"))
+data$what___3.factor = factor(data$what___3,levels=c("0","1"))
+data$what___4.factor = factor(data$what___4,levels=c("0","1"))
+data$what___5.factor = factor(data$what___5,levels=c("0","1"))
+data$what___6.factor = factor(data$what___6,levels=c("0","1"))
+data$what___7.factor = factor(data$what___7,levels=c("0","1"))
+data$what___8.factor = factor(data$what___8,levels=c("0","1"))
+data$what___9.factor = factor(data$what___9,levels=c("0","1"))
+data$what___10.factor = factor(data$what___10,levels=c("0","1"))
+data$what___11.factor = factor(data$what___11,levels=c("0","1"))
+data$what___12.factor = factor(data$what___12,levels=c("0","1"))
+data$what___13.factor = factor(data$what___13,levels=c("0","1"))
+data$what___14.factor = factor(data$what___14,levels=c("0","1"))
+data$what___15.factor = factor(data$what___15,levels=c("0","1"))
+data$details_0___1.factor = factor(data$details_0___1,levels=c("0","1"))
+data$details_0___2.factor = factor(data$details_0___2,levels=c("0","1"))
+data$details_0___3.factor = factor(data$details_0___3,levels=c("0","1"))
+data$details_0___4.factor = factor(data$details_0___4,levels=c("0","1"))
+data$details_0___5.factor = factor(data$details_0___5,levels=c("0","1"))
+data$details_0___6.factor = factor(data$details_0___6,levels=c("0","1"))
+data$details_2___1.factor = factor(data$details_2___1,levels=c("0","1"))
+data$details_2___2.factor = factor(data$details_2___2,levels=c("0","1"))
+data$details_2___3.factor = factor(data$details_2___3,levels=c("0","1"))
+data$details_2___4.factor = factor(data$details_2___4,levels=c("0","1"))
+data$details_2___5.factor = factor(data$details_2___5,levels=c("0","1"))
+data$details_2___6.factor = factor(data$details_2___6,levels=c("0","1"))
+data$details_4___1.factor = factor(data$details_4___1,levels=c("0","1"))
+data$details_4___2.factor = factor(data$details_4___2,levels=c("0","1"))
+data$details_4___3.factor = factor(data$details_4___3,levels=c("0","1"))
+data$details_4___4.factor = factor(data$details_4___4,levels=c("0","1"))
+data$details_4___5.factor = factor(data$details_4___5,levels=c("0","1"))
+data$details_4___6.factor = factor(data$details_4___6,levels=c("0","1"))
+data$details_6___1.factor = factor(data$details_6___1,levels=c("0","1"))
+data$details_6___2.factor = factor(data$details_6___2,levels=c("0","1"))
+data$details_6___3.factor = factor(data$details_6___3,levels=c("0","1"))
+data$details_6___4.factor = factor(data$details_6___4,levels=c("0","1"))
+data$details_6___5.factor = factor(data$details_6___5,levels=c("0","1"))
+data$details_6___6.factor = factor(data$details_6___6,levels=c("0","1"))
+data$details_8___1.factor = factor(data$details_8___1,levels=c("0","1"))
+data$details_8___2.factor = factor(data$details_8___2,levels=c("0","1"))
+data$details_8___3.factor = factor(data$details_8___3,levels=c("0","1"))
+data$details_8___4.factor = factor(data$details_8___4,levels=c("0","1"))
+data$details_8___5.factor = factor(data$details_8___5,levels=c("0","1"))
+data$details_8___6.factor = factor(data$details_8___6,levels=c("0","1"))
+data$details_10___1.factor = factor(data$details_10___1,levels=c("0","1"))
+data$details_10___2.factor = factor(data$details_10___2,levels=c("0","1"))
+data$details_10___3.factor = factor(data$details_10___3,levels=c("0","1"))
+data$details_10___4.factor = factor(data$details_10___4,levels=c("0","1"))
+data$details_10___5.factor = factor(data$details_10___5,levels=c("0","1"))
+data$details_10___6.factor = factor(data$details_10___6,levels=c("0","1"))
+data$details_12___1.factor = factor(data$details_12___1,levels=c("0","1"))
+data$details_12___2.factor = factor(data$details_12___2,levels=c("0","1"))
+data$details_12___3.factor = factor(data$details_12___3,levels=c("0","1"))
+data$details_12___4.factor = factor(data$details_12___4,levels=c("0","1"))
+data$details_12___5.factor = factor(data$details_12___5,levels=c("0","1"))
+data$details_12___6.factor = factor(data$details_12___6,levels=c("0","1"))
+data$details_13___1.factor = factor(data$details_13___1,levels=c("0","1"))
+data$details_13___2.factor = factor(data$details_13___2,levels=c("0","1"))
+data$details_13___3.factor = factor(data$details_13___3,levels=c("0","1"))
+data$details_13___4.factor = factor(data$details_13___4,levels=c("0","1"))
+data$details_13___5.factor = factor(data$details_13___5,levels=c("0","1"))
+data$details_13___6.factor = factor(data$details_13___6,levels=c("0","1"))
+data$details_14___1.factor = factor(data$details_14___1,levels=c("0","1"))
+data$details_14___2.factor = factor(data$details_14___2,levels=c("0","1"))
+data$details_14___3.factor = factor(data$details_14___3,levels=c("0","1"))
+data$details_14___4.factor = factor(data$details_14___4,levels=c("0","1"))
+data$details_14___5.factor = factor(data$details_14___5,levels=c("0","1"))
+data$details_14___6.factor = factor(data$details_14___6,levels=c("0","1"))
+data$microbiome_data_complete.factor = factor(data$microbiome_data_complete,levels=c("0","1","2"))
+data$what_post___0.factor = factor(data$what_post___0,levels=c("0","1"))
+data$what_post___1.factor = factor(data$what_post___1,levels=c("0","1"))
+data$what_post___2.factor = factor(data$what_post___2,levels=c("0","1"))
+data$what_post___3.factor = factor(data$what_post___3,levels=c("0","1"))
+data$what_post___4.factor = factor(data$what_post___4,levels=c("0","1"))
+data$what_post___5.factor = factor(data$what_post___5,levels=c("0","1"))
+data$what_post___6.factor = factor(data$what_post___6,levels=c("0","1"))
+data$what_post___7.factor = factor(data$what_post___7,levels=c("0","1"))
+data$what_post___8.factor = factor(data$what_post___8,levels=c("0","1"))
+data$what_post___9.factor = factor(data$what_post___9,levels=c("0","1"))
+data$what_post___10.factor = factor(data$what_post___10,levels=c("0","1"))
+data$what_post___11.factor = factor(data$what_post___11,levels=c("0","1"))
+data$what_post___12.factor = factor(data$what_post___12,levels=c("0","1"))
+data$what_post___13.factor = factor(data$what_post___13,levels=c("0","1"))
+data$what_post___14.factor = factor(data$what_post___14,levels=c("0","1"))
+data$what_post___15.factor = factor(data$what_post___15,levels=c("0","1"))
+data$details_0_post___1.factor = factor(data$details_0_post___1,levels=c("0","1"))
+data$details_0_post___2.factor = factor(data$details_0_post___2,levels=c("0","1"))
+data$details_0_post___3.factor = factor(data$details_0_post___3,levels=c("0","1"))
+data$details_0_post___4.factor = factor(data$details_0_post___4,levels=c("0","1"))
+data$details_0_post___5.factor = factor(data$details_0_post___5,levels=c("0","1"))
+data$details_0_post___6.factor = factor(data$details_0_post___6,levels=c("0","1"))
+data$details_2_post___1.factor = factor(data$details_2_post___1,levels=c("0","1"))
+data$details_2_post___2.factor = factor(data$details_2_post___2,levels=c("0","1"))
+data$details_2_post___3.factor = factor(data$details_2_post___3,levels=c("0","1"))
+data$details_2_post___4.factor = factor(data$details_2_post___4,levels=c("0","1"))
+data$details_2_post___5.factor = factor(data$details_2_post___5,levels=c("0","1"))
+data$details_2_post___6.factor = factor(data$details_2_post___6,levels=c("0","1"))
+data$details_4_post___1.factor = factor(data$details_4_post___1,levels=c("0","1"))
+data$details_4_post___2.factor = factor(data$details_4_post___2,levels=c("0","1"))
+data$details_4_post___3.factor = factor(data$details_4_post___3,levels=c("0","1"))
+data$details_4_post___4.factor = factor(data$details_4_post___4,levels=c("0","1"))
+data$details_4_post___5.factor = factor(data$details_4_post___5,levels=c("0","1"))
+data$details_4_post___6.factor = factor(data$details_4_post___6,levels=c("0","1"))
+data$details_6_post___1.factor = factor(data$details_6_post___1,levels=c("0","1"))
+data$details_6_post___2.factor = factor(data$details_6_post___2,levels=c("0","1"))
+data$details_6_post___3.factor = factor(data$details_6_post___3,levels=c("0","1"))
+data$details_6_post___4.factor = factor(data$details_6_post___4,levels=c("0","1"))
+data$details_6_post___5.factor = factor(data$details_6_post___5,levels=c("0","1"))
+data$details_6_post___6.factor = factor(data$details_6_post___6,levels=c("0","1"))
+data$details_8_post___1.factor = factor(data$details_8_post___1,levels=c("0","1"))
+data$details_8_post___2.factor = factor(data$details_8_post___2,levels=c("0","1"))
+data$details_8_post___3.factor = factor(data$details_8_post___3,levels=c("0","1"))
+data$details_8_post___4.factor = factor(data$details_8_post___4,levels=c("0","1"))
+data$details_8_post___5.factor = factor(data$details_8_post___5,levels=c("0","1"))
+data$details_8_post___6.factor = factor(data$details_8_post___6,levels=c("0","1"))
+data$details_10_post___1.factor = factor(data$details_10_post___1,levels=c("0","1"))
+data$details_10_post___2.factor = factor(data$details_10_post___2,levels=c("0","1"))
+data$details_10_post___3.factor = factor(data$details_10_post___3,levels=c("0","1"))
+data$details_10_post___4.factor = factor(data$details_10_post___4,levels=c("0","1"))
+data$details_10_post___5.factor = factor(data$details_10_post___5,levels=c("0","1"))
+data$details_10_post___6.factor = factor(data$details_10_post___6,levels=c("0","1"))
+data$details_12_post___1.factor = factor(data$details_12_post___1,levels=c("0","1"))
+data$details_12_post___2.factor = factor(data$details_12_post___2,levels=c("0","1"))
+data$details_12_post___3.factor = factor(data$details_12_post___3,levels=c("0","1"))
+data$details_12_post___4.factor = factor(data$details_12_post___4,levels=c("0","1"))
+data$details_12_post___5.factor = factor(data$details_12_post___5,levels=c("0","1"))
+data$details_12_post___6.factor = factor(data$details_12_post___6,levels=c("0","1"))
+data$details_13_post___1.factor = factor(data$details_13_post___1,levels=c("0","1"))
+data$details_13_post___2.factor = factor(data$details_13_post___2,levels=c("0","1"))
+data$details_13_post___3.factor = factor(data$details_13_post___3,levels=c("0","1"))
+data$details_13_post___4.factor = factor(data$details_13_post___4,levels=c("0","1"))
+data$details_13_post___5.factor = factor(data$details_13_post___5,levels=c("0","1"))
+data$details_13_post___6.factor = factor(data$details_13_post___6,levels=c("0","1"))
+data$details_14_post___1.factor = factor(data$details_14_post___1,levels=c("0","1"))
+data$details_14_post___2.factor = factor(data$details_14_post___2,levels=c("0","1"))
+data$details_14_post___3.factor = factor(data$details_14_post___3,levels=c("0","1"))
+data$details_14_post___4.factor = factor(data$details_14_post___4,levels=c("0","1"))
+data$details_14_post___5.factor = factor(data$details_14_post___5,levels=c("0","1"))
+data$details_14_post___6.factor = factor(data$details_14_post___6,levels=c("0","1"))
+data$follow_up_microbiome_data_complete.factor = factor(data$follow_up_microbiome_data_complete,levels=c("0","1","2"))
+data$need_to_blow_nose.factor = factor(data$need_to_blow_nose,levels=c("0","1","2","3","4","5"))
+data$sneezing.factor = factor(data$sneezing,levels=c("0","1","2","3","4","5"))
+data$runny_nose.factor = factor(data$runny_nose,levels=c("0","1","2","3","4","5"))
+data$nasal_obstruction.factor = factor(data$nasal_obstruction,levels=c("0","1","2","3","4","5"))
+data$loss_of_smell_or_taste.factor = factor(data$loss_of_smell_or_taste,levels=c("0","1","2","3","4","5"))
+data$cough.factor = factor(data$cough,levels=c("0","1","2","3","4","5"))
+data$post_nasal_discharge.factor = factor(data$post_nasal_discharge,levels=c("0","1","2","3","4","5"))
+data$thick_nasal_discharge.factor = factor(data$thick_nasal_discharge,levels=c("0","1","2","3","4","5"))
+data$ear_fullness.factor = factor(data$ear_fullness,levels=c("0","1","2","3","4","5"))
+data$dizziness.factor = factor(data$dizziness,levels=c("0","1","2","3","4","5"))
+data$ear_pain.factor = factor(data$ear_pain,levels=c("0","1","2","3","4","5"))
+data$facial_pain_pressure.factor = factor(data$facial_pain_pressure,levels=c("0","1","2","3","4","5"))
+data$difficulty.factor = factor(data$difficulty,levels=c("0","1","2","3","4","5"))
+data$wake_up_at_night.factor = factor(data$wake_up_at_night,levels=c("0","1","2","3","4","5"))
+data$lack.factor = factor(data$lack,levels=c("0","1","2","3","4","5"))
+data$wake_up_tired.factor = factor(data$wake_up_tired,levels=c("0","1","2","3","4","5"))
+data$fatigue.factor = factor(data$fatigue,levels=c("0","1","2","3","4","5"))
+data$reduced_productivity.factor = factor(data$reduced_productivity,levels=c("0","1","2","3","4","5"))
+data$reduced_concentration.factor = factor(data$reduced_concentration,levels=c("0","1","2","3","4","5"))
+data$frustrated.factor = factor(data$frustrated,levels=c("0","1","2","3","4","5"))
+data$sad.factor = factor(data$sad,levels=c("0","1","2","3","4","5"))
+data$embarrassed.factor = factor(data$embarrassed,levels=c("0","1","2","3","4","5"))
+data$preop_snot_complete.factor = factor(data$preop_snot_complete,levels=c("0","1","2"))
+data$need_to_blow_nose_1mo.factor = factor(data$need_to_blow_nose_1mo,levels=c("0","1","2","3","4","5"))
+data$sneezing_1mo.factor = factor(data$sneezing_1mo,levels=c("0","1","2","3","4","5"))
+data$runny_nose_1mo.factor = factor(data$runny_nose_1mo,levels=c("0","1","2","3","4","5"))
+data$nasal_obstruction_1mo.factor = factor(data$nasal_obstruction_1mo,levels=c("0","1","2","3","4","5"))
+data$loss_of_smell_or_taste_1mo.factor = factor(data$loss_of_smell_or_taste_1mo,levels=c("0","1","2","3","4","5"))
+data$cough_1mo.factor = factor(data$cough_1mo,levels=c("0","1","2","3","4","5"))
+data$post_nasal_discharge_1mo.factor = factor(data$post_nasal_discharge_1mo,levels=c("0","1","2","3","4","5"))
+data$thick_nasal_discharge_1mo.factor = factor(data$thick_nasal_discharge_1mo,levels=c("0","1","2","3","4","5"))
+data$ear_fullness_1mo.factor = factor(data$ear_fullness_1mo,levels=c("0","1","2","3","4","5"))
+data$dizziness_1mo.factor = factor(data$dizziness_1mo,levels=c("0","1","2","3","4","5"))
+data$ear_pain_1mo.factor = factor(data$ear_pain_1mo,levels=c("0","1","2","3","4","5"))
+data$facial_pain_pressure_1mo.factor = factor(data$facial_pain_pressure_1mo,levels=c("0","1","2","3","4","5"))
+data$difficulty_1mo.factor = factor(data$difficulty_1mo,levels=c("0","1","2","3","4","5"))
+data$wake_up_at_night_1mo.factor = factor(data$wake_up_at_night_1mo,levels=c("0","1","2","3","4","5"))
+data$lack_1mo.factor = factor(data$lack_1mo,levels=c("0","1","2","3","4","5"))
+data$wake_up_tired_1mo.factor = factor(data$wake_up_tired_1mo,levels=c("0","1","2","3","4","5"))
+data$fatigue_1mo.factor = factor(data$fatigue_1mo,levels=c("0","1","2","3","4","5"))
+data$reduced_productivity_1mo.factor = factor(data$reduced_productivity_1mo,levels=c("0","1","2","3","4","5"))
+data$reduced_concentration_1mo.factor = factor(data$reduced_concentration_1mo,levels=c("0","1","2","3","4","5"))
+data$frustrated_1mo.factor = factor(data$frustrated_1mo,levels=c("0","1","2","3","4","5"))
+data$sad_1mo.factor = factor(data$sad_1mo,levels=c("0","1","2","3","4","5"))
+data$embarrassed_1mo.factor = factor(data$embarrassed_1mo,levels=c("0","1","2","3","4","5"))
+data$postop_snot_1_month_complete.factor = factor(data$postop_snot_1_month_complete,levels=c("0","1","2"))
+data$need_to_blow_nose_3mo.factor = factor(data$need_to_blow_nose_3mo,levels=c("0","1","2","3","4","5"))
+data$sneezing_3mo.factor = factor(data$sneezing_3mo,levels=c("0","1","2","3","4","5"))
+data$runny_nose_3mo.factor = factor(data$runny_nose_3mo,levels=c("0","1","2","3","4","5"))
+data$nasal_obstruction_3mo.factor = factor(data$nasal_obstruction_3mo,levels=c("0","1","2","3","4","5"))
+data$loss_of_smell_or_taste_3mo.factor = factor(data$loss_of_smell_or_taste_3mo,levels=c("0","1","2","3","4","5"))
+data$cough_3mo.factor = factor(data$cough_3mo,levels=c("0","1","2","3","4","5"))
+data$post_nasal_discharge_3mo.factor = factor(data$post_nasal_discharge_3mo,levels=c("0","1","2","3","4","5"))
+data$thick_nasal_discharge_3mo.factor = factor(data$thick_nasal_discharge_3mo,levels=c("0","1","2","3","4","5"))
+data$ear_fullness_3mo.factor = factor(data$ear_fullness_3mo,levels=c("0","1","2","3","4","5"))
+data$dizziness_3mo.factor = factor(data$dizziness_3mo,levels=c("0","1","2","3","4","5"))
+data$ear_pain_3mo.factor = factor(data$ear_pain_3mo,levels=c("0","1","2","3","4","5"))
+data$facial_pain_pressure_3mo.factor = factor(data$facial_pain_pressure_3mo,levels=c("0","1","2","3","4","5"))
+data$difficulty_3mo.factor = factor(data$difficulty_3mo,levels=c("0","1","2","3","4","5"))
+data$wake_up_at_night_3mo.factor = factor(data$wake_up_at_night_3mo,levels=c("0","1","2","3","4","5"))
+data$lack_3mo.factor = factor(data$lack_3mo,levels=c("0","1","2","3","4","5"))
+data$wake_up_tired_3mo.factor = factor(data$wake_up_tired_3mo,levels=c("0","1","2","3","4","5"))
+data$fatigue_3mo.factor = factor(data$fatigue_3mo,levels=c("0","1","2","3","4","5"))
+data$reduced_productivity_3mo.factor = factor(data$reduced_productivity_3mo,levels=c("0","1","2","3","4","5"))
+data$reduced_concentration_3mo.factor = factor(data$reduced_concentration_3mo,levels=c("0","1","2","3","4","5"))
+data$frustrated_3mo.factor = factor(data$frustrated_3mo,levels=c("0","1","2","3","4","5"))
+data$sad_3mo.factor = factor(data$sad_3mo,levels=c("0","1","2","3","4","5"))
+data$embarrassed_3mo.factor = factor(data$embarrassed_3mo,levels=c("0","1","2","3","4","5"))
+data$postop_snot_3_months_complete.factor = factor(data$postop_snot_3_months_complete,levels=c("0","1","2"))
+data$need_to_blow_nose_6mo.factor = factor(data$need_to_blow_nose_6mo,levels=c("0","1","2","3","4","5"))
+data$sneezing_6mo.factor = factor(data$sneezing_6mo,levels=c("0","1","2","3","4","5"))
+data$runny_nose_6mo.factor = factor(data$runny_nose_6mo,levels=c("0","1","2","3","4","5"))
+data$nasal_obstruction_6mo.factor = factor(data$nasal_obstruction_6mo,levels=c("0","1","2","3","4","5"))
+data$loss_of_smell_or_taste_6mo.factor = factor(data$loss_of_smell_or_taste_6mo,levels=c("0","1","2","3","4","5"))
+data$cough_6mo.factor = factor(data$cough_6mo,levels=c("0","1","2","3","4","5"))
+data$post_nasal_discharge_6mo.factor = factor(data$post_nasal_discharge_6mo,levels=c("0","1","2","3","4","5"))
+data$thick_nasal_discharge_6mo.factor = factor(data$thick_nasal_discharge_6mo,levels=c("0","1","2","3","4","5"))
+data$ear_fullness_6mo.factor = factor(data$ear_fullness_6mo,levels=c("0","1","2","3","4","5"))
+data$dizziness_6mo.factor = factor(data$dizziness_6mo,levels=c("0","1","2","3","4","5"))
+data$ear_pain_6mo.factor = factor(data$ear_pain_6mo,levels=c("0","1","2","3","4","5"))
+data$facial_pain_pressure_6mo.factor = factor(data$facial_pain_pressure_6mo,levels=c("0","1","2","3","4","5"))
+data$difficulty_6mo.factor = factor(data$difficulty_6mo,levels=c("0","1","2","3","4","5"))
+data$wake_up_at_night_6mo.factor = factor(data$wake_up_at_night_6mo,levels=c("0","1","2","3","4","5"))
+data$lack_6mo.factor = factor(data$lack_6mo,levels=c("0","1","2","3","4","5"))
+data$wake_up_tired_6mo.factor = factor(data$wake_up_tired_6mo,levels=c("0","1","2","3","4","5"))
+data$fatigue_6mo.factor = factor(data$fatigue_6mo,levels=c("0","1","2","3","4","5"))
+data$reduced_productivity_6mo.factor = factor(data$reduced_productivity_6mo,levels=c("0","1","2","3","4","5"))
+data$reduced_concentration_6mo.factor = factor(data$reduced_concentration_6mo,levels=c("0","1","2","3","4","5"))
+data$frustrated_6mo.factor = factor(data$frustrated_6mo,levels=c("0","1","2","3","4","5"))
+data$sad_6mo.factor = factor(data$sad_6mo,levels=c("0","1","2","3","4","5"))
+data$embarrassed_6mo.factor = factor(data$embarrassed_6mo,levels=c("0","1","2","3","4","5"))
+data$postop_snot_6_months_complete.factor = factor(data$postop_snot_6_months_complete,levels=c("0","1","2"))
+data$need_to_blow_nose_12mo.factor = factor(data$need_to_blow_nose_12mo,levels=c("0","1","2","3","4","5"))
+data$sneezing_12mo.factor = factor(data$sneezing_12mo,levels=c("0","1","2","3","4","5"))
+data$runny_nose_12mo.factor = factor(data$runny_nose_12mo,levels=c("0","1","2","3","4","5"))
+data$nasal_obstruction_12mo.factor = factor(data$nasal_obstruction_12mo,levels=c("0","1","2","3","4","5"))
+data$loss_of_smell_or_taste_12mo.factor = factor(data$loss_of_smell_or_taste_12mo,levels=c("0","1","2","3","4","5"))
+data$cough_12mo.factor = factor(data$cough_12mo,levels=c("0","1","2","3","4","5"))
+data$post_nasal_discharge_12mo.factor = factor(data$post_nasal_discharge_12mo,levels=c("0","1","2","3","4","5"))
+data$thick_nasal_discharge_12mo.factor = factor(data$thick_nasal_discharge_12mo,levels=c("0","1","2","3","4","5"))
+data$ear_fullness_12mo.factor = factor(data$ear_fullness_12mo,levels=c("0","1","2","3","4","5"))
+data$dizziness_12mo.factor = factor(data$dizziness_12mo,levels=c("0","1","2","3","4","5"))
+data$ear_pain_12mo.factor = factor(data$ear_pain_12mo,levels=c("0","1","2","3","4","5"))
+data$facial_pain_pressure_12mo.factor = factor(data$facial_pain_pressure_12mo,levels=c("0","1","2","3","4","5"))
+data$difficulty_12mo.factor = factor(data$difficulty_12mo,levels=c("0","1","2","3","4","5"))
+data$wake_up_at_night_12mo.factor = factor(data$wake_up_at_night_12mo,levels=c("0","1","2","3","4","5"))
+data$lack_12mo.factor = factor(data$lack_12mo,levels=c("0","1","2","3","4","5"))
+data$wake_up_tired_12mo.factor = factor(data$wake_up_tired_12mo,levels=c("0","1","2","3","4","5"))
+data$fatigue_12mo.factor = factor(data$fatigue_12mo,levels=c("0","1","2","3","4","5"))
+data$reduced_productivity_12mo.factor = factor(data$reduced_productivity_12mo,levels=c("0","1","2","3","4","5"))
+data$reduced_concentration_12mo.factor = factor(data$reduced_concentration_12mo,levels=c("0","1","2","3","4","5"))
+data$frustrated_12mo.factor = factor(data$frustrated_12mo,levels=c("0","1","2","3","4","5"))
+data$sad_12mo.factor = factor(data$sad_12mo,levels=c("0","1","2","3","4","5"))
+data$embarrassed_12mo.factor = factor(data$embarrassed_12mo,levels=c("0","1","2","3","4","5"))
+data$postop_snot_12_months_complete.factor = factor(data$postop_snot_12_months_complete,levels=c("0","1","2"))
+data$surgeon_list.factor = factor(data$surgeon_list,levels=c("1","2","3","4","5","6"))
+data$smoking_history___1.factor = factor(data$smoking_history___1,levels=c("0","1"))
+data$smoking_history___2.factor = factor(data$smoking_history___2,levels=c("0","1"))
+data$smoking_history___3.factor = factor(data$smoking_history___3,levels=c("0","1"))
+data$smoking_history___4.factor = factor(data$smoking_history___4,levels=c("0","1"))
+data$second_hand_smoke.factor = factor(data$second_hand_smoke,levels=c("1","0"))
+data$medications_surgery___1.factor = factor(data$medications_surgery___1,levels=c("0","1"))
+data$medications_surgery___2.factor = factor(data$medications_surgery___2,levels=c("0","1"))
+data$medications_surgery___3.factor = factor(data$medications_surgery___3,levels=c("0","1"))
+data$medications_surgery___4.factor = factor(data$medications_surgery___4,levels=c("0","1"))
+data$nasal_irrigations___1.factor = factor(data$nasal_irrigations___1,levels=c("0","1"))
+data$nasal_irrigations___2.factor = factor(data$nasal_irrigations___2,levels=c("0","1"))
+data$nasal_irrigations___3.factor = factor(data$nasal_irrigations___3,levels=c("0","1"))
+data$nasal_irrigations___4.factor = factor(data$nasal_irrigations___4,levels=c("0","1"))
+data$nasal_irrigations___5.factor = factor(data$nasal_irrigations___5,levels=c("0","1"))
+data$second_surgery_complete.factor = factor(data$second_surgery_complete,levels=c("0","1","2"))
+
+levels(data$t2r38.factor)=c("Yes","No")
+levels(data$sf_12_pre.factor)=c("Yes","No")
+levels(data$taste_test_subjects.factor)=c("Yes","No")
+levels(data$saliva_report.factor)=c("Yes","No")
+levels(data$sniffin_report.factor)=c("Yes","No")
+levels(data$po_sniffin_sticks_complete.factor)=c("Yes","No")
+levels(data$taste_complete.factor)=c("Yes","No")
+levels(data$saliva.factor)=c("Yes","No")
+levels(data$genotypeavail.factor)=c("Yes","No")
+levels(data$ro1_grant.factor)=c("Yes","No")
+levels(data$ip_study.factor)=c("Yes","No")
+levels(data$microbiome.factor)=c("Yes","No")
+levels(data$olfactory.factor)=c("Yes","No")
+levels(data$meera.factor)=c("Yes","No")
+levels(data$midland.factor)=c("Yes","No")
+levels(data$r21.factor)=c("Yes","No")
+levels(data$cf_study.factor)=c("Yes","No")
+levels(data$cytokines.factor)=c("Yes","No")
+levels(data$single_sinus.factor)=c("Yes","No")
+levels(data$gottfried.factor)=c("Yes","No")
+levels(data$sponge_baseline.factor)=c("Yes","No")
+levels(data$second_taste.factor)=c("Yes","No")
+levels(data$gender.factor)=c("Male","Female")
+levels(data$ethnicity.factor)=c("Hispanic, Latino","Non-Hispanic, Non-Latino")
+levels(data$new_race.factor)=c("White","Black or African American","Asian","American Indian or Alaska Native","Native Hawaiian or Other Pacific Islander")
+levels(data$race.factor)=c("White/Caucasian","Hispanic","African American","African","Asian","Hindu")
+levels(data$control.factor)=c("Yes","No")
+levels(data$consents___1.factor)=c("Unchecked","Checked")
+levels(data$consents___2.factor)=c("Unchecked","Checked")
+levels(data$consents___3.factor)=c("Unchecked","Checked")
+levels(data$consents___4.factor)=c("Unchecked","Checked")
+levels(data$consents___5.factor)=c("Unchecked","Checked")
+levels(data$consents___6.factor)=c("Unchecked","Checked")
+levels(data$consents___7.factor)=c("Unchecked","Checked")
+levels(data$consents___8.factor)=c("Unchecked","Checked")
+levels(data$consents___9.factor)=c("Unchecked","Checked")
+levels(data$consents___10.factor)=c("Unchecked","Checked")
+levels(data$consents___11.factor)=c("Unchecked","Checked")
+levels(data$email.factor)=c("Yes","No")
+levels(data$or_data.factor)=c("Yes","No")
+levels(data$surgeon.factor)=c("Alexander Chiu, M.D.","James Palmer, M.D.","David Kennedy, M.D.","Nithin Adappa, M.D.","Bert OMalley, M.D.","Thaler, M.D.","Abboud, M.D.","Mike Kohanski, M.D.")
+levels(data$polyps.factor)=c("Yes","No")
+levels(data$odor_pre___1.factor)=c("Unchecked","Checked")
+levels(data$odor_pre___2.factor)=c("Unchecked","Checked")
+levels(data$odor_pre___3.factor)=c("Unchecked","Checked")
+levels(data$odor_pre___4.factor)=c("Unchecked","Checked")
+levels(data$odor_pre___5.factor)=c("Unchecked","Checked")
+levels(data$odor_pre___6.factor)=c("Unchecked","Checked")
+levels(data$odor_pre___7.factor)=c("Unchecked","Checked")
+levels(data$odor_pre___8.factor)=c("Unchecked","Checked")
+levels(data$odor_pre___9.factor)=c("Unchecked","Checked")
+levels(data$odor_pre___10.factor)=c("Unchecked","Checked")
+levels(data$odor_pre___11.factor)=c("Unchecked","Checked")
+levels(data$odor_pre___12.factor)=c("Unchecked","Checked")
+levels(data$odor_post___1.factor)=c("Unchecked","Checked")
+levels(data$odor_post___2.factor)=c("Unchecked","Checked")
+levels(data$odor_post___3.factor)=c("Unchecked","Checked")
+levels(data$odor_post___4.factor)=c("Unchecked","Checked")
+levels(data$odor_post___5.factor)=c("Unchecked","Checked")
+levels(data$odor_post___6.factor)=c("Unchecked","Checked")
+levels(data$odor_post___7.factor)=c("Unchecked","Checked")
+levels(data$odor_post___8.factor)=c("Unchecked","Checked")
+levels(data$odor_post___9.factor)=c("Unchecked","Checked")
+levels(data$odor_post___10.factor)=c("Unchecked","Checked")
+levels(data$odor_post___11.factor)=c("Unchecked","Checked")
+levels(data$odor_post___12.factor)=c("Unchecked","Checked")
+levels(data$co_morbid___1.factor)=c("Unchecked","Checked")
+levels(data$co_morbid___2.factor)=c("Unchecked","Checked")
+levels(data$co_morbid___3.factor)=c("Unchecked","Checked")
+levels(data$co_morbid___4.factor)=c("Unchecked","Checked")
+levels(data$co_morbid___16.factor)=c("Unchecked","Checked")
+levels(data$co_morbid___5.factor)=c("Unchecked","Checked")
+levels(data$co_morbid___6.factor)=c("Unchecked","Checked")
+levels(data$co_morbid___7.factor)=c("Unchecked","Checked")
+levels(data$co_morbid___8.factor)=c("Unchecked","Checked")
+levels(data$co_morbid___9.factor)=c("Unchecked","Checked")
+levels(data$co_morbid___10.factor)=c("Unchecked","Checked")
+levels(data$co_morbid___11.factor)=c("Unchecked","Checked")
+levels(data$co_morbid___12.factor)=c("Unchecked","Checked")
+levels(data$co_morbid___13.factor)=c("Unchecked","Checked")
+levels(data$co_morbid___14.factor)=c("Unchecked","Checked")
+levels(data$co_morbid___15.factor)=c("Unchecked","Checked")
+levels(data$ars.factor)=c("Yes","No")
+levels(data$ars_symptoms.factor)=c("Yes","No")
+levels(data$withdrew.factor)=c("Yes","No")
+levels(data$second_surgery.factor)=c("Yes","No")
+levels(data$patient_data_complete.factor)=c("Incomplete","Unverified","Complete")
+levels(data$what___0.factor)=c("Unchecked","Checked")
+levels(data$what___1.factor)=c("Unchecked","Checked")
+levels(data$what___2.factor)=c("Unchecked","Checked")
+levels(data$what___3.factor)=c("Unchecked","Checked")
+levels(data$what___4.factor)=c("Unchecked","Checked")
+levels(data$what___5.factor)=c("Unchecked","Checked")
+levels(data$what___6.factor)=c("Unchecked","Checked")
+levels(data$what___7.factor)=c("Unchecked","Checked")
+levels(data$what___8.factor)=c("Unchecked","Checked")
+levels(data$what___9.factor)=c("Unchecked","Checked")
+levels(data$what___10.factor)=c("Unchecked","Checked")
+levels(data$what___11.factor)=c("Unchecked","Checked")
+levels(data$what___12.factor)=c("Unchecked","Checked")
+levels(data$what___13.factor)=c("Unchecked","Checked")
+levels(data$what___14.factor)=c("Unchecked","Checked")
+levels(data$what___15.factor)=c("Unchecked","Checked")
+levels(data$details_0___1.factor)=c("Unchecked","Checked")
+levels(data$details_0___2.factor)=c("Unchecked","Checked")
+levels(data$details_0___3.factor)=c("Unchecked","Checked")
+levels(data$details_0___4.factor)=c("Unchecked","Checked")
+levels(data$details_0___5.factor)=c("Unchecked","Checked")
+levels(data$details_0___6.factor)=c("Unchecked","Checked")
+levels(data$details_2___1.factor)=c("Unchecked","Checked")
+levels(data$details_2___2.factor)=c("Unchecked","Checked")
+levels(data$details_2___3.factor)=c("Unchecked","Checked")
+levels(data$details_2___4.factor)=c("Unchecked","Checked")
+levels(data$details_2___5.factor)=c("Unchecked","Checked")
+levels(data$details_2___6.factor)=c("Unchecked","Checked")
+levels(data$details_4___1.factor)=c("Unchecked","Checked")
+levels(data$details_4___2.factor)=c("Unchecked","Checked")
+levels(data$details_4___3.factor)=c("Unchecked","Checked")
+levels(data$details_4___4.factor)=c("Unchecked","Checked")
+levels(data$details_4___5.factor)=c("Unchecked","Checked")
+levels(data$details_4___6.factor)=c("Unchecked","Checked")
+levels(data$details_6___1.factor)=c("Unchecked","Checked")
+levels(data$details_6___2.factor)=c("Unchecked","Checked")
+levels(data$details_6___3.factor)=c("Unchecked","Checked")
+levels(data$details_6___4.factor)=c("Unchecked","Checked")
+levels(data$details_6___5.factor)=c("Unchecked","Checked")
+levels(data$details_6___6.factor)=c("Unchecked","Checked")
+levels(data$details_8___1.factor)=c("Unchecked","Checked")
+levels(data$details_8___2.factor)=c("Unchecked","Checked")
+levels(data$details_8___3.factor)=c("Unchecked","Checked")
+levels(data$details_8___4.factor)=c("Unchecked","Checked")
+levels(data$details_8___5.factor)=c("Unchecked","Checked")
+levels(data$details_8___6.factor)=c("Unchecked","Checked")
+levels(data$details_10___1.factor)=c("Unchecked","Checked")
+levels(data$details_10___2.factor)=c("Unchecked","Checked")
+levels(data$details_10___3.factor)=c("Unchecked","Checked")
+levels(data$details_10___4.factor)=c("Unchecked","Checked")
+levels(data$details_10___5.factor)=c("Unchecked","Checked")
+levels(data$details_10___6.factor)=c("Unchecked","Checked")
+levels(data$details_12___1.factor)=c("Unchecked","Checked")
+levels(data$details_12___2.factor)=c("Unchecked","Checked")
+levels(data$details_12___3.factor)=c("Unchecked","Checked")
+levels(data$details_12___4.factor)=c("Unchecked","Checked")
+levels(data$details_12___5.factor)=c("Unchecked","Checked")
+levels(data$details_12___6.factor)=c("Unchecked","Checked")
+levels(data$details_13___1.factor)=c("Unchecked","Checked")
+levels(data$details_13___2.factor)=c("Unchecked","Checked")
+levels(data$details_13___3.factor)=c("Unchecked","Checked")
+levels(data$details_13___4.factor)=c("Unchecked","Checked")
+levels(data$details_13___5.factor)=c("Unchecked","Checked")
+levels(data$details_13___6.factor)=c("Unchecked","Checked")
+levels(data$details_14___1.factor)=c("Unchecked","Checked")
+levels(data$details_14___2.factor)=c("Unchecked","Checked")
+levels(data$details_14___3.factor)=c("Unchecked","Checked")
+levels(data$details_14___4.factor)=c("Unchecked","Checked")
+levels(data$details_14___5.factor)=c("Unchecked","Checked")
+levels(data$details_14___6.factor)=c("Unchecked","Checked")
+levels(data$microbiome_data_complete.factor)=c("Incomplete","Unverified","Complete")
+levels(data$what_post___0.factor)=c("Unchecked","Checked")
+levels(data$what_post___1.factor)=c("Unchecked","Checked")
+levels(data$what_post___2.factor)=c("Unchecked","Checked")
+levels(data$what_post___3.factor)=c("Unchecked","Checked")
+levels(data$what_post___4.factor)=c("Unchecked","Checked")
+levels(data$what_post___5.factor)=c("Unchecked","Checked")
+levels(data$what_post___6.factor)=c("Unchecked","Checked")
+levels(data$what_post___7.factor)=c("Unchecked","Checked")
+levels(data$what_post___8.factor)=c("Unchecked","Checked")
+levels(data$what_post___9.factor)=c("Unchecked","Checked")
+levels(data$what_post___10.factor)=c("Unchecked","Checked")
+levels(data$what_post___11.factor)=c("Unchecked","Checked")
+levels(data$what_post___12.factor)=c("Unchecked","Checked")
+levels(data$what_post___13.factor)=c("Unchecked","Checked")
+levels(data$what_post___14.factor)=c("Unchecked","Checked")
+levels(data$what_post___15.factor)=c("Unchecked","Checked")
+levels(data$details_0_post___1.factor)=c("Unchecked","Checked")
+levels(data$details_0_post___2.factor)=c("Unchecked","Checked")
+levels(data$details_0_post___3.factor)=c("Unchecked","Checked")
+levels(data$details_0_post___4.factor)=c("Unchecked","Checked")
+levels(data$details_0_post___5.factor)=c("Unchecked","Checked")
+levels(data$details_0_post___6.factor)=c("Unchecked","Checked")
+levels(data$details_2_post___1.factor)=c("Unchecked","Checked")
+levels(data$details_2_post___2.factor)=c("Unchecked","Checked")
+levels(data$details_2_post___3.factor)=c("Unchecked","Checked")
+levels(data$details_2_post___4.factor)=c("Unchecked","Checked")
+levels(data$details_2_post___5.factor)=c("Unchecked","Checked")
+levels(data$details_2_post___6.factor)=c("Unchecked","Checked")
+levels(data$details_4_post___1.factor)=c("Unchecked","Checked")
+levels(data$details_4_post___2.factor)=c("Unchecked","Checked")
+levels(data$details_4_post___3.factor)=c("Unchecked","Checked")
+levels(data$details_4_post___4.factor)=c("Unchecked","Checked")
+levels(data$details_4_post___5.factor)=c("Unchecked","Checked")
+levels(data$details_4_post___6.factor)=c("Unchecked","Checked")
+levels(data$details_6_post___1.factor)=c("Unchecked","Checked")
+levels(data$details_6_post___2.factor)=c("Unchecked","Checked")
+levels(data$details_6_post___3.factor)=c("Unchecked","Checked")
+levels(data$details_6_post___4.factor)=c("Unchecked","Checked")
+levels(data$details_6_post___5.factor)=c("Unchecked","Checked")
+levels(data$details_6_post___6.factor)=c("Unchecked","Checked")
+levels(data$details_8_post___1.factor)=c("Unchecked","Checked")
+levels(data$details_8_post___2.factor)=c("Unchecked","Checked")
+levels(data$details_8_post___3.factor)=c("Unchecked","Checked")
+levels(data$details_8_post___4.factor)=c("Unchecked","Checked")
+levels(data$details_8_post___5.factor)=c("Unchecked","Checked")
+levels(data$details_8_post___6.factor)=c("Unchecked","Checked")
+levels(data$details_10_post___1.factor)=c("Unchecked","Checked")
+levels(data$details_10_post___2.factor)=c("Unchecked","Checked")
+levels(data$details_10_post___3.factor)=c("Unchecked","Checked")
+levels(data$details_10_post___4.factor)=c("Unchecked","Checked")
+levels(data$details_10_post___5.factor)=c("Unchecked","Checked")
+levels(data$details_10_post___6.factor)=c("Unchecked","Checked")
+levels(data$details_12_post___1.factor)=c("Unchecked","Checked")
+levels(data$details_12_post___2.factor)=c("Unchecked","Checked")
+levels(data$details_12_post___3.factor)=c("Unchecked","Checked")
+levels(data$details_12_post___4.factor)=c("Unchecked","Checked")
+levels(data$details_12_post___5.factor)=c("Unchecked","Checked")
+levels(data$details_12_post___6.factor)=c("Unchecked","Checked")
+levels(data$details_13_post___1.factor)=c("Unchecked","Checked")
+levels(data$details_13_post___2.factor)=c("Unchecked","Checked")
+levels(data$details_13_post___3.factor)=c("Unchecked","Checked")
+levels(data$details_13_post___4.factor)=c("Unchecked","Checked")
+levels(data$details_13_post___5.factor)=c("Unchecked","Checked")
+levels(data$details_13_post___6.factor)=c("Unchecked","Checked")
+levels(data$details_14_post___1.factor)=c("Unchecked","Checked")
+levels(data$details_14_post___2.factor)=c("Unchecked","Checked")
+levels(data$details_14_post___3.factor)=c("Unchecked","Checked")
+levels(data$details_14_post___4.factor)=c("Unchecked","Checked")
+levels(data$details_14_post___5.factor)=c("Unchecked","Checked")
+levels(data$details_14_post___6.factor)=c("Unchecked","Checked")
+levels(data$follow_up_microbiome_data_complete.factor)=c("Incomplete","Unverified","Complete")
+levels(data$need_to_blow_nose.factor)=c("0","1","2","3","4","5")
+levels(data$sneezing.factor)=c("0","1","2","3","4","5")
+levels(data$runny_nose.factor)=c("0","1","2","3","4","5")
+levels(data$nasal_obstruction.factor)=c("0","1","2","3","4","5")
+levels(data$loss_of_smell_or_taste.factor)=c("0","1","2","3","4","5")
+levels(data$cough.factor)=c("0","1","2","3","4","5")
+levels(data$post_nasal_discharge.factor)=c("0","1","2","3","4","5")
+levels(data$thick_nasal_discharge.factor)=c("0","1","2","3","4","5")
+levels(data$ear_fullness.factor)=c("0","1","2","3","4","5")
+levels(data$dizziness.factor)=c("0","1","2","3","4","5")
+levels(data$ear_pain.factor)=c("0","1","2","3","4","5")
+levels(data$facial_pain_pressure.factor)=c("0","1","2","3","4","5")
+levels(data$difficulty.factor)=c("0","1","2","3","4","5")
+levels(data$wake_up_at_night.factor)=c("0","1","2","3","4","5")
+levels(data$lack.factor)=c("0","1","2","3","4","5")
+levels(data$wake_up_tired.factor)=c("0","1","2","3","4","5")
+levels(data$fatigue.factor)=c("0","1","2","3","4","5")
+levels(data$reduced_productivity.factor)=c("0","1","2","3","4","5")
+levels(data$reduced_concentration.factor)=c("0","1","2","3","4","5")
+levels(data$frustrated.factor)=c("0","1","2","3","4","5")
+levels(data$sad.factor)=c("0","1","2","3","4","5")
+levels(data$embarrassed.factor)=c("0","1","2","3","4","5")
+levels(data$preop_snot_complete.factor)=c("Incomplete","Unverified","Complete")
+levels(data$need_to_blow_nose_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$sneezing_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$runny_nose_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$nasal_obstruction_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$loss_of_smell_or_taste_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$cough_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$post_nasal_discharge_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$thick_nasal_discharge_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$ear_fullness_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$dizziness_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$ear_pain_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$facial_pain_pressure_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$difficulty_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$wake_up_at_night_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$lack_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$wake_up_tired_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$fatigue_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$reduced_productivity_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$reduced_concentration_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$frustrated_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$sad_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$embarrassed_1mo.factor)=c("0","1","2","3","4","5")
+levels(data$postop_snot_1_month_complete.factor)=c("Incomplete","Unverified","Complete")
+levels(data$need_to_blow_nose_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$sneezing_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$runny_nose_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$nasal_obstruction_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$loss_of_smell_or_taste_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$cough_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$post_nasal_discharge_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$thick_nasal_discharge_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$ear_fullness_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$dizziness_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$ear_pain_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$facial_pain_pressure_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$difficulty_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$wake_up_at_night_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$lack_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$wake_up_tired_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$fatigue_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$reduced_productivity_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$reduced_concentration_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$frustrated_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$sad_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$embarrassed_3mo.factor)=c("0","1","2","3","4","5")
+levels(data$postop_snot_3_months_complete.factor)=c("Incomplete","Unverified","Complete")
+levels(data$need_to_blow_nose_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$sneezing_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$runny_nose_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$nasal_obstruction_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$loss_of_smell_or_taste_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$cough_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$post_nasal_discharge_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$thick_nasal_discharge_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$ear_fullness_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$dizziness_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$ear_pain_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$facial_pain_pressure_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$difficulty_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$wake_up_at_night_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$lack_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$wake_up_tired_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$fatigue_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$reduced_productivity_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$reduced_concentration_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$frustrated_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$sad_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$embarrassed_6mo.factor)=c("0","1","2","3","4","5")
+levels(data$postop_snot_6_months_complete.factor)=c("Incomplete","Unverified","Complete")
+levels(data$need_to_blow_nose_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$sneezing_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$runny_nose_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$nasal_obstruction_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$loss_of_smell_or_taste_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$cough_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$post_nasal_discharge_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$thick_nasal_discharge_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$ear_fullness_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$dizziness_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$ear_pain_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$facial_pain_pressure_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$difficulty_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$wake_up_at_night_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$lack_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$wake_up_tired_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$fatigue_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$reduced_productivity_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$reduced_concentration_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$frustrated_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$sad_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$embarrassed_12mo.factor)=c("0","1","2","3","4","5")
+levels(data$postop_snot_12_months_complete.factor)=c("Incomplete","Unverified","Complete")
+levels(data$surgeon_list.factor)=c("James Palmer, MD","Nithin Adappa, MD","Abboud, MD","Thaler, MD","David Kennedy, MD","Noam Cohen, MD")
+levels(data$smoking_history___1.factor)=c("Unchecked","Checked")
+levels(data$smoking_history___2.factor)=c("Unchecked","Checked")
+levels(data$smoking_history___3.factor)=c("Unchecked","Checked")
+levels(data$smoking_history___4.factor)=c("Unchecked","Checked")
+levels(data$second_hand_smoke.factor)=c("Yes","No")
+levels(data$medications_surgery___1.factor)=c("Unchecked","Checked")
+levels(data$medications_surgery___2.factor)=c("Unchecked","Checked")
+levels(data$medications_surgery___3.factor)=c("Unchecked","Checked")
+levels(data$medications_surgery___4.factor)=c("Unchecked","Checked")
+levels(data$nasal_irrigations___1.factor)=c("Unchecked","Checked")
+levels(data$nasal_irrigations___2.factor)=c("Unchecked","Checked")
+levels(data$nasal_irrigations___3.factor)=c("Unchecked","Checked")
+levels(data$nasal_irrigations___4.factor)=c("Unchecked","Checked")
+levels(data$nasal_irrigations___5.factor)=c("Unchecked","Checked")
+levels(data$second_surgery_complete.factor)=c("Incomplete","Unverified","Complete")
+
+
+# Rename comorbidities columns
+names(data)[names(data) == "co_morbid___1"] <- "asthma"
+names(data)[names(data) == "co_morbid___2"] <- "immunocompromised"
+names(data)[names(data) == "co_morbid___3"] <- "immt"
+names(data)[names(data) == "co_morbid___4"] <- "asa" #ASA sensitive
+names(data)[names(data) == "co_morbid___5"] <- "afs"
+names(data)[names(data) == "co_morbid___6"] <- "cf"
+names(data)[names(data) == "co_morbid___7"] <- "gerd"
+names(data)[names(data) == "co_morbid___8"] <- "htn"
+names(data)[names(data) == "co_morbid___9"] <- "hl" #Hyperlipidemia
+names(data)[names(data) == "co_morbid___10"] <- "st" #Sinonasal trauma
+names(data)[names(data) == "co_morbid___11"] <- "polyps2"
+names(data)[names(data) == "co_morbid___12"] <- "aerd"
+names(data)[names(data) == "co_morbid___13"] <- "dm"
+names(data)[names(data) == "co_morbid___14"] <- "osa"
+names(data)[names(data) == "co_morbid___15"] <- "other"
+names(data)[names(data) == "co_morbid___16"] <- "asad" #ASA desensitized
+names(data)[names(data) == "gender"] <- "sex"
+names(data)[names(data) == "polyps"] <- "polyps.old"
+names(data)[names(data) == "polyps2"] <- "polyps"
+#re-code for sex and ethnicity
+data<-mutate(data, ethnicity=ifelse(ethnicity==2, 2, 1))
+
+#checking columns
+names(data)
+
+```
+
+
+```{r include=FALSE, echo=FALSE}
+#create working file
+base_data <- data
+base_data <- as.data.frame(base_data)
+
+#format dob
+base_data$dob<-str_replace(base_data$dob, '[0-9]+$', '19\\0')
+base_data$dob<-format(strptime(base_data$dob,"%m/%d/%Y"),"%Y/%m/%d") 
+
+#creat smoking_hx
+base_data$smoking_hx <- ifelse(base_data$smoking_history___1==1, 4,ifelse(base_data$smoking_history___2 ==1, 0, ifelse(base_data$smoking_history___3==0, 0,ifelse(base_data$smoking_history___4=="1", 0, ""))))
+
+dim(base_data) #2385 x 814
+#filter out tumor patients and keep patients with control==0
+base_data <-filter(base_data, control==0)
+dim(base_data) #1012 x 814
+```
+
+
+```{r, include=FALSE, echo=FALSE}
+#import other data
+control <- readxl::read_xlsx("control_data_uniqueid.xlsx")
+taste <- readxl::read_xlsx("tbl_Pheno_Cohen_Taste.xlsx","Updated_based_on_chart_review")
+geno <- readxl::read_xlsx("geno.xlsx", "uniqueid")
+
+
+var_control <- control %>% summary.default %>% as.data.frame %>% 
+  dplyr::group_by(Var1) %>%  tidyr::spread(key = Var2, value = Freq)
+var_taste <- taste %>% summary.default %>% as.data.frame %>% 
+  dplyr::group_by(Var1) %>%  tidyr::spread(key = Var2, value = Freq)
+var_geno <- geno %>% summary.default %>% as.data.frame %>% 
+  dplyr::group_by(Var1) %>%  tidyr::spread(key = Var2, value = Freq)
+
+#Clean control and add covariates in control data
+control$tissueid <- control$UniqueID
+control$Haplotype <- control$t2r38
+control <- control %>% distinct(tissueid, .keep_all = TRUE)
+control <-subset(control,is.na(sinusrxlastsix))
+
+control$aerd <- ""
+control$ars <- ""
+control$asa <- ""
+control$afs <- ""
+control$polyps <- 0
+control$gerd <- ""
+control$htn <- ""
+control$dm <- ""
+control$bmi <- ""
+control$fess <- ""
+control$prevfess <- ""
+control$postfess <- ""
+control$osa <- ""
+control$stau <- ""
+control$psae <- ""
+control$stpn <- ""
+control$mrsa <- ""
+control$hain <- ""
+control$esco <- ""
+control$cone <- ""
+control$grne <- ""
+control$fung <- ""
+control$nogr <- ""
+control$anae <- ""
+control$step <- ""
+control$ct <- ""
+control$cf <- ""
+
+control$wegeners <- ""
+control$churgstrauss <- ""
+control$sarcoidosis <- ""
+control$sjogrens <- ""
+control$autoimmuneother <- ""
+control$HIV <- ""
+control$transplant <- ""
+control$immunodefother <- ""
+control$abxsteroiddate <- ""
+
+control$right_sphenoid <- ""
+control$right_post_ethmoid <- ""
+control$right_ant_ethmoid <- ""
+control$right_o_complex <- ""
+control$right_maxillary <- ""
+control$right_frontal <- ""
+control$left_sphenoid <- ""
+control$left_post_ethmoid <- ""
+control$left_ant_ethmoid <- ""
+control$left_o_complex <- ""
+control$left_maxillary <- ""
+control$left_frontal <- ""
+
+#Clean taste dataset
+taste <- taste %>% distinct(tissueid, .keep_all = TRUE)
+
+
+#Get list of logids in each dataset
+list1 <- data.frame(base_data$tissue) %>% unique(base_data$tissue, incomparables=FALSE)
+list2 <- data.frame(control$tissueid) %>% unique(control$tissueid, incomparables=FALSE)
+list3 <- data.frame(taste$tissueid) %>% unique(taste$tissueid, incomparables=FALSE)
+
+
+missing2 <- anti_join(list2,list1,by=c("control.tissueid"="base_data.tissue"))
+missing3<- anti_join(list3,list1,by=c("taste.tissueid"="base_data.tissue"))
+
+#Merge, geno, taste data
+
+names(base_data)[names(base_data) == "tissue"] <- "tissueid"
+redcap1 <- base_data %>% distinct(tissueid, .keep_all = TRUE)
+
+data_taste <- merge(redcap1, taste, by="tissueid", all.x=TRUE) 
+data_taste_geno <- merge(data_taste, geno, by="tissueid", all.x=TRUE) 
+
+#Examining control data
+cols <- intersect(colnames(data_taste_geno), colnames(control))
+d1 <- rbind.fill(data_taste_geno[,cols], control[,cols])
+
+#Calculate age based on dob and testing date
+d1$age <- (as.Date(d1$TestingDate, format="%yyyy%mm%dd") - ymd(d1$dob))/365.25
+
+#Assign flag for cases and control
+tissueid_data <- unique(data_taste_geno$tissueid) %>% as.data.frame
+tissueid_control <- unique(control$tissueid) %>% as.data.frame
+
+#library("reprex")
+d1$control[as.numeric(d1$tissueid) >= 977] <- 0 
+d1$control[as.numeric(d1$tissueid) <= 400] <- 1
+
+#Assign flag for history of smoking
+d1$dichosmoking <- d1$smoking_hx 
+d1$NeverSmoker <- d1$smoking_hx 
+d1 <- mutate(d1, dichosmoking = ifelse(dichosmoking == "4", "0", "1"), NeverSmoker = ifelse(NeverSmoker == "4", "1", "0"))
+
+#drop snot22 data that don't match 
+drops <-c("need_to_blow_nose",	"sneezing",	"runny_nose",	"nasal_obstruction",	"loss_of_smell_or_taste",	"cough",	"post_nasal_discharge",	"thick_nasal_discharge",	"ear_fullness",	"dizziness",	"ear_pain",	"facial_pain_pressure",	"difficulty",	"wake_up_at_night",	"lack",	"wake_up_tired",	"fatigue",	"reduced_productivity",	"reduced_concentration",	"frustrated",	"sad",	"embarrassed")
+d1<-d1[,!(names(d1) %in% drops)]
+#add missing columns 
+d2<- read.csv("datareadyfortest_Edited.csv", header=T)
+col<-names(d2)[!(names(d2)%in%names(d1))]
+add<-d2[,c("tissueid", col)]
+add$fess<-as.character(add$fess)
+add$stau<-as.character(add$stau)
+add$stpn<-as.character(add$stpn)
+add$mrsa<-as.character(add$mrsa)
+add$hain<-as.character(add$hain)
+add$esco<-as.character(add$esco)
+add$fung<-as.character(add$fung)
+add$step<-as.character(add$step)
+add$psae<-as.character(add$psae)
+
+##merge new data with
+d3 <-merge(d1, add, by="tissueid", all.y = TRUE)
+d3$sex <-as.character(d3$sex)
+d3$race <-as.character(d3$race)
+d3$ethnicity <-as.character(d3$ethnicity)
+d3$dichosmoking <-as.character(d3$dichosmoking)
+d3$NeverSmoker <-as.character(d3$NeverSmoker)
+write.csv(d3, "datareadyfortest.csv", row.names = FALSE)
+```
+
+
+```{r prep, include=FALSE, echo=FALSE}
+#Cleaning
+redcap <- data.frame(d3)
+
+#how many cf patients n=45 dropped
+redcap$cf<-as.numeric(redcap$cf)
+cf<-subset(redcap, cf==1)
+redcap <-redcap[!(redcap$tissueid %in% cf$tissueid),]
+
+#drop not used columns
+drops<-c("t2r38", "cf", "prior_fess") 
+redcap <- redcap[,!(names(d3)%in% drops)]
+
+#Remove missing values for mydata
+mydata<-redcap#%>%drop_na(sex,age,dichosmoking)
+test_before <- unique(redcap$tissueid) %>% as.data.frame
+test_after <- unique(mydata$tissueid) %>% as.data.frame #1130 patients dropped
+
+#Immunodeficiencies
+mydata$immunodef <- rowSums(as.data.frame(lapply(mydata[c("wegeners","churgstrauss","sarcoidosis","sjogrens","autoimmuneother","HIV","transplant","immunodefother")],as.numeric)))
+
+#SNOT-22
+mydata$snot22 <- rowSums(mydata[c("need_to_blow_nose","sneezing","runny_nose","nasal_obstruction","loss_of_smell_or_taste","cough","post_nasal_discharge","thick_nasal_discharge","ear_fullness","dizziness","ear_pain","facial_pain_pressure","difficulty","wake_up_at_night","lack","wake_up_tired","fatigue","reduced_productivity","reduced_concentration","frustrated","sad","embarrassed")])
+
+#CT scores
+mydata$ctscores <- rowSums(as.data.frame(lapply(mydata[c("right_sphenoid","right_post_ethmoid","right_ant_ethmoid","right_o_complex","right_maxillary","right_frontal","left_sphenoid","left_post_ethmoid","left_ant_ethmoid","left_o_complex","left_maxillary","left_frontal")],as.numeric)))
+
+#Haplotypes
+#grep("Haplotype", colnames(mydata))
+grep("catgeno", colnames(mydata))
+haplotype_before <-
+      ddply(mydata,~Haplotype,summarise,number_of_pts=length(unique(tissueid)))
+mydata$Haplotype[which(mydata$Haplotype != "AVI/AVI" &
+                        mydata$Haplotype != "AVI/PAV" & 
+                        mydata$Haplotype != "PAV/PAV")] <- "Other"
+haplotype_after <-
+      ddply(mydata,~Haplotype,summarise,number_of_pts=length(unique(tissueid)))
+haplotype_after
+
+mydata$TAS2R38 <- mydata$Haplotype
+
+#Other numeric variables
+mydata$age <- as.numeric(mydata$age)
+mydata$bmi <- as.numeric(mydata$bmi)
+mydata<-rename(mydata, c(dichosmoking="EverSmoker"))
+
+#Prep for combo scores
+names(mydata)
+
+pDB <- grepl("DBIntensity", names(mydata), fixed = TRUE)
+pSUC <- grepl("SucroseIntensity", names(mydata), fixed = TRUE) 
+pQUI <- grepl("QuinineIntensity", names(mydata), fixed = TRUE) 
+pPTC <- grepl("PTCIntensity", names(mydata), fixed = TRUE) 
+pNaCl <- grepl("NaClIntensity", names(mydata), fixed = TRUE)
+
+mydata <- data.frame(mydata,DB=(rowSums(mydata[, pDB]))/2,
+                 SUC=(rowSums(mydata[, pSUC]))/2,
+                 QUI=(rowSums(mydata[, pQUI]))/2,
+                 PTC=(rowSums(mydata[, pPTC]))/2,
+                 NaCl=(rowSums(mydata[, pNaCl]))/2)
+
+mydata$water <- (mydata$MilliQWaterIntensity1 + mydata$MiliQH2OIntensity9)/2
+
+names(mydata)
+
+mydata$All_total <- mydata$DB + mydata$SUC + mydata$PTC + mydata$QUI + mydata$NaCl + mydata$water
+
+mydata$SUC_prop <- 100-(mydata$SUC/mydata$All_total*100)
+mydata$DB_prop <- mydata$DB/mydata$All_total*100
+mydata$QUI_prop <- mydata$QUI/mydata$All_total*100
+mydata$PTC_prop <- mydata$PTC/mydata$All_total*100
+mydata$NaCl_prop <- mydata$NaCl/mydata$All_total*100
+mydata$water_prop <- mydata$water/mydata$All_total*100
+
+mydata$DB_combo_prop <- mydata$DB_prop+mydata$SUC_prop
+mydata$QUI_combo_prop <- mydata$QUI_prop+mydata$SUC_prop
+mydata$PTC_combo_prop <- mydata$PTC_prop+mydata$SUC_prop
+
+#To improve matching, categorize continuous variables
+quantile(mydata$age, na.rm=T)
+mydata$agecat<-cut(as.numeric(mydata$age), c(18,34,48,59,83))
+mydata$agecat2<-as.character(mydata$agecat)
+
+
+#Clean up categorical variables
+mydata$sex<-factor(mydata$sex)
+mydata$EverSmoker<-factor(mydata$EverSmoker)
+mydata$asthma1<-mydata$asthma
+mydata$asthma1<-as.numeric(mydata$asthma1)
+mydata$asthma<-mydata$asthma1
+mydata$asthma1<-NULL
+
+#Create the CRSsNP noAsthma variable
+mydata$sNPsAsthma<- ifelse(mydata$polyps==0 & mydata$asthma==0,1,0)
+
+#mydata needs your group variable to be LOGICAL, and not just dichotomous
+mydata$control<-as.logical(mydata$control)
+
+#Create column catgeno
+mydata$catgeno <- mydata$TAS2R38 
+
+#Create a DF just for the mydata call
+final <- mydata
+mydatadf <-final %>%
+  filter(immunocompromised != "1" | is.na(immunocompromised)) %>%
+  filter(immunodef !="1"& immunodef !="2" |is.na(immunodef))
+
+#Remove patients with missing genotype
+mydatadf <- mydatadf[which(is.na(mydatadf$Haplotype)==F),] 
+
+
+mydatadf$aerd[is.na(mydatadf$aerd)]<-""
+mydatadf$prevfess[is.na(mydatadf$prevfess)]<-""
+
+```
+
+
+```{r table1, include=FALSE, echo=FALSE, warning=FALSE, message=FALSE}
+
+#Select vars
+baseline<-c("sex", "newrace", "ethnicity", "EverSmoker", "NeverSmoker", "asthma" ,  "age", "snot22", "TAS2R38") 
+
+catVars<-c("sex", "newrace", "ethnicity", "EverSmoker","asthma","TAS2R38")
+
+taste<-c("PTC", "DB", "QUI", "SUC", "NaCl", "water", "DB_combo_prop", "QUI_combo_prop", "PTC_combo_prop")
+
+basecomicro<-c("aerd", "afs", "ars", "asa", "dm", 
+           "gerd", "htn", "polyps", "osa", "fess", 
+           "stau", "psae", "stpn", "mrsa", "hain", "esco", 
+          "fung",  "step")
+#Forgot cystic fibrosis aboce and some microbiota
+
+table1<-CreateTableOne(vars=baseline, data=mydatadf, factorVars=catVars, strata=c("control"))
+table1<-print(table1, exact=catVars, smd= TRUE)
+
+table2<-CreateTableOne(vars=taste, data=mydatadf, strata=c("control"))
+table2<-print(table2,smd= TRUE)
+
+mydatadf_cases<-mydatadf[which(mydatadf$control==FALSE),]
+tablecomicro<-CreateTableOne(vars=basecomicro, data=mydatadf_cases, factorVars=catVars)
+tablecomicro<-print(tablecomicro, exact=catVars, smd= TRUE)
+```
+
+## (1) Stratifying by Disease Status (CRS v. Controls)
+
+### Summary of Data
+```{r, echo=FALSE}
+table1 %>%
+  kable(caption="Table 1. Subject characteristics, CRS v. Controls") %>%
+  row_spec(1, bold=T) %>%
+  kable_styling(bootstrap_options = c("hover", "condensed","striped"), full_width = F, fixed_thead = T) %>%
+  pack_rows("Smoker", 5, 6) %>%
+  pack_rows("Comorbidities", 7,7) %>%
+  pack_rows("Continuous Variable", 8,9) %>%
+  pack_rows("TAS2R38 diplotype", 10,14)
+write.csv(table1, "Table1_immunocomp_excluded.csv", row.names=T)
+```
+CRS=Chronic rhinosinusitis; P=p-value; SMD=standardized mean differences; N=number of subjects; %=percent; White = people of European ancestry by self-report, Non-white = otherwise; yrs=years of age; SNOT-22, Sinonasal Outcome Test, scores range from 0 to 110 with higher values indicating worse symptoms. TAS2R38 diplotype, the combination of two haplotypes of the bitter receptor, PAV is the 'taster' form whereas the AVI is the 'on-taster' form. 
+
+```{r,echo=FALSE}
+table2 %>%
+  kable(caption="Unadjusted Taste Test Scores, CRS v. Controls") %>%
+  row_spec(1, bold=T) %>%
+  kable_styling(bootstrap_options = c("hover", "condensed", "striped"), full_width = F)
+write.csv(table2, "Table2_immunocomp_excluded.csv", row.names=T)
+```
+Note: The 'DB.Combo' score was generated by taking the subjects DB proportion (DB score over total taste test score) and adding it to one minus their Sucrose proportion (Sucrose score over total taste test score). The 'QU.Combo' score was generated in the same fashion, except using the subject's Quinine proportion instead of DB proportion.
+
+
+### CRS patients: comorbidities and microbiota	
+```{r,echo=FALSE}
+kable(tablecomicro, col.names=c("N (%)"), caption="Table 2 CRS patients: comorbidities and microbiota") %>%
+  row_spec(1, bold=T) %>%
+  kable_styling(bootstrap_options = c("hover", "condensed", "striped"), full_width = F) %>%
+  pack_rows("Comorbidities", 2, 11) %>%
+  pack_rows("Microbiota", 12, 19)
+write.csv(tablecomicro, "Table_comorb_microbiota.csv", row.names=T)
+```
+
+### Hardy Weinberg equilibrium (HWE) for TAS2R38 haplotype frequency within CRS and controls 
+```{r, echo=FALSE, include=FALSE}
+
+haplo<-ddply(mydatadf,control~Haplotype,summarise,Number=length(unique(tissueid)))
+
+#Controls
+haplo_control <- haplo[which(haplo$control==TRUE & haplo$Haplotype !="Other"),]
+x <- haplo_control$Number
+names(x) <- c("AA", "AP", "PP")
+HW.test.controls<- HWExact(x, alternative = "two.sided", pvaluetype = "selome", x.linked = FALSE, verbose = TRUE) 
+p.allele_control <- 1*(x[[2]]+x[[3]]+x[[3]]) / (2*(x[[1]]+x[[2]]+x[[3]]))
+pval_control <- HW.test.controls$pval
+
+#Cases
+haplo_case <- haplo[which(haplo$control==FALSE & haplo$Haplotype !="Other"),] 
+y <- haplo_case$Number
+names(y) <- c("AA", "AP", "PP")
+HW.test.case <- HWExact(y, alternative = "two.sided", pvaluetype = "selome", x.linked = FALSE, verbose = TRUE)
+p.allele_case <- 1*(y[[2]]+y[[3]]+y[[3]]) / (2*(y[[1]]+y[[2]]+y[[3]]))
+pval_case <- HW.test.case$pval
+
+#Table
+p.allele <- c(p.allele_control,p.allele_case)
+pval <- c(pval_control,pval_case)
+cats <- c("Controls", "Cases")
+hwetest <- data.frame(Control=cats, p.allele=p.allele, pval=pval)
+```
+
+
+
+```{r, echo=FALSE}
+hwetest %>%
+  kable(caption="HWE calculations, CRS v. Controls")%>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = F, fixed_thead = T) 
+
+```
+
+### (1) GLM with Covariate Analysis (CRS vs Controls)
+Looking at age, sex, smoking history and comorbidity asthma cordifferences between the sinusitis and control patient cohorts and effect on taste test scores for PTC, DB, QUI, and SUC.
+
+```{r covariate, include=FALSE, echo=FALSE}
+
+mydata1<-mydatadf[c("tissueid","PTC", "DB", "QUI", "SUC", "NaCl", "water", "DB_combo_prop", "QUI_combo_prop", "PTC_combo_prop", "snot22","control", "age", "sex", "TAS2R38", "EverSmoker" , "asthma")]
+
+#loop
+results_lm <- data.frame()
+results_lmphc <- data.frame()
+varlist <- names(mydata1)[2:11]
+for(var in varlist){
+  # dynamically generate formula
+  fmla <- as.formula(paste0(var, "~control+age+sex+EverSmoker+asthma"))
+   #fit glm model
+  fit <- aov(lm(fmla, mydata1))
+  summaryw <- summary(lm(fmla, mydata1))
+  fdendf.w <- summaryw$fstatistic[[3]]
+  results <- data.frame(tidy(fit),fdendf.w)
+  beta<-data.frame(tidy(lm(fmla, mydata1))[2:6,2:5])
+  beta[nrow(beta)+1,]<-NA
+  results<-bind_cols(results, beta)
+  results<-bind_cols(results, eta_squared(fit))
+  results_lm <- rbind(results_lm, results)
+ 
+  lsmeans = lsmeans::lsmeans  ### Uses the lsmeans function
+                            ###  from the lsmeans package,
+                            ###  not from the lmerTest 
+  leastsquarea = lsmeans(fit,
+                      pairwise ~ control,
+                      adjust="tukey", data=mydata1)
+  phc<-tidy(leastsquarea$contrasts)
+  results_lmphc<-rbind(results_lmphc, phc)
+}
+
+#results_lm<-results_lm[which(results_lm$term=="control"),]
+
+results_lm$Compound<-c("PTC","PTC","PTC","PTC","PTC","PTC", "DB","DB","DB","DB","DB","DB",  "Quinine","Quinine","Quinine","Quinine","Quinine","Quinine", "Sucrose","Sucrose","Sucrose","Sucrose","Sucrose","Sucrose","NaCl", "NaCl","NaCl","NaCl","NaCl","NaCl","H2O", "H2O","H2O","H2O","H2O","H2O","DB.Combo","DB.Combo","DB.Combo","DB.Combo","DB.Combo","DB.Combo", "QU.Combo","QU.Combo","QU.Combo","QU.Combo","QU.Combo","QU.Combo","PTC.Combo","PTC.Combo","PTC.Combo","PTC.Combo","PTC.Combo","PTC.Combo","SNOT-22","SNOT-22","SNOT-22","SNOT-22","SNOT-22","SNOT-22")
+
+results_lmphc$Compound<-c("PTC","DB","Quinine", "Sucrose","NaCl", "H2O","DB.Combo", "QU.Combo","PTC.Combo","SNOT-22")
+
+```
+
+```{r, echo=FALSE, warning=FALSE}
+results_lm<-results_lm[,c(14,1:11,13)]
+results_lm %>%
+  format_model_table %>%
+  kable (digits=1, caption="GLM CRS result", col.names=c("Compound","term","df","sumsq","meansq","F","p","dendf","beta", "std.err","statistic",  "p.value", "Eta_Sq")) %>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = F)%>%
+  row_spec(c(7,13,19,25,31), bold = T, color = "white", background = "#D7261E") %>%
+  row_spec(c(1,26), bold = T, color = "grey", background = "#E0E0E0")
+```
+
+
+```{r echo=FALSE, warning=FALSE}
+results_lmphc<-results_lmphc[,c(8, 1:7)]
+kable(results_lmphc , caption="GLM CRS, Posthoc test for case_control") %>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = F)
+
+```
+
+
+
+### (2) Stratifying by Polyp Status (option 1)
+
+```{r covariate2, include=FALSE, echo=FALSE}
+
+mydata1<-mydatadf[c("tissueid","PTC", "DB", "QUI", "SUC", "NaCl", "water", "DB_combo_prop", "QUI_combo_prop", "PTC_combo_prop", "snot22","control", "age", "sex", "TAS2R38", "EverSmoker" , "asthma", "polyps")]
+mydata1$control=ifelse(mydata1$control=="TRUE", "CNTR", ifelse(mydata1$control=="FALSE" & mydata1$polyps==0, "CRSsNP", "CRSwNP"))
+  
+#loop
+results_lm <- data.frame()
+results_lmphc <- data.frame()
+varlist <- names(mydata1)[2:11]
+for(var in varlist){
+  # dynamically generate formula
+  fmla <- as.formula(paste0(var, "~control+age+sex+EverSmoker+asthma"))
+   #fit glm model
+  fit <- aov(lm(fmla, mydata1))
+  summaryw <- summary(lm(fmla, mydata1))
+  fdendf.w <- summaryw$fstatistic[[3]]
+  results <- data.frame(tidy(fit),fdendf.w)
+  beta<-data.frame(tidy(lm(fmla, mydata1))[2:6,2:5])
+  beta[nrow(beta)+1,]<-NA
+  results<-bind_cols(results, beta)
+  results<-bind_cols(results, eta_squared(fit))
+  results_lm <- rbind(results_lm, results)
+ 
+  lsmeans = lsmeans::lsmeans  ### Uses the lsmeans function
+                            ###  from the lsmeans package,
+                            ###  not from the lmerTest 
+  leastsquarea = lsmeans(fit,
+                      pairwise ~ control,
+                      adjust="tukey", data=mydata1)
+  phc<-tidy(leastsquarea$contrasts)
+  results_lmphc<-rbind(results_lmphc, phc)
+}
+
+#results_lm<-results_lm[which(results_lm$term=="control"),]
+
+results_lm$Compound<-c("PTC","PTC","PTC","PTC","PTC","PTC", "DB","DB","DB","DB","DB","DB",  "Quinine","Quinine","Quinine","Quinine","Quinine","Quinine", "Sucrose","Sucrose","Sucrose","Sucrose","Sucrose","Sucrose","NaCl", "NaCl","NaCl","NaCl","NaCl","NaCl","H2O", "H2O","H2O","H2O","H2O","H2O","DB.Combo","DB.Combo","DB.Combo","DB.Combo","DB.Combo","DB.Combo", "QU.Combo","QU.Combo","QU.Combo","QU.Combo","QU.Combo","QU.Combo","PTC.Combo","PTC.Combo","PTC.Combo","PTC.Combo","PTC.Combo","PTC.Combo","SNOT-22","SNOT-22","SNOT-22","SNOT-22","SNOT-22","SNOT-22")
+
+results_lmphc$Compound<-c("PTC","","", "DB","","","Quinine", "","","Sucrose","","","NaCl","","", "H2O","","","DB.Combo","","", "QU.Combo","","","PTC.Combo","","","SNOT-22","","")
+
+```
+
+```{r, echo=FALSE, warning=FALSE}
+results_lm<-results_lm[,c(14,1:11,13)]
+results_lm %>%
+  format_model_table %>%
+  kable (digits=1, caption="GLM CRSsNP+CRSwNP result", col.names=c("Compound","term","df","sumsq","meansq","F","p","dendf","beta", "std.err","statistic",  "p.value", "Eta_Sq")) %>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = F)%>%
+  row_spec(c(7,13,19,25,31), bold = T, color = "white", background = "#D7261E") %>%
+  row_spec(c(1,26), bold = T, color = "grey", background = "#E0E0E0")
+```
+
+
+```{r echo=FALSE, warning=FALSE}
+results_lmphc<-results_lmphc[,c(8, 1:7)]
+kable(results_lmphc , caption="GLM CRSsNP+CRSwNP, Posthoc test for case_control") %>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = F)
+
+```
+
+
+## (2) Stratifying by Polyp Status (option 2)
+
+In order to assess for differences in PTC taste scores we need to stratify our model by polyp status  (sNP = no polyps; wNP = with polyps).
+
+```{r polyps, include=FALSE, warning=FALSE, echo=FALSE}
+
+d.polyps <-
+      ddply(mydatadf,control~polyps,summarise,number_of_pts=length(unique(tissueid)))
+d.polyps
+
+d.CRSsNP<-mydatadf[which(mydatadf$polyps=="0" & mydatadf$control==0),] #cases without polyps
+d.CRSwNP<-mydatadf[which(mydatadf$polyps=="1" & mydatadf$control==0),] #cases with polyps
+d.Controls <-mydatadf[which(mydatadf$control==1),] #controls
+d.AllsNP<-mydatadf[which(mydatadf$polyps=="0"),] #all no polyps
+d.AllwNP<-rbind(d.CRSwNP, d.Controls)
+
+d.polyps <-
+      ddply(d.AllsNP,control~polyps,summarise,number_of_pts=length(unique(tissueid)))
+
+###AllsNP
+table1AllsNP<-CreateTableOne(vars=baseline, data=d.AllsNP, factorVars=catVars, strata=c("control"))
+table1AllsNP<-print(table1AllsNP, exact=catVars, smd= TRUE)
+
+table2AllsNP<-CreateTableOne(vars=taste, data=d.AllsNP, strata=c("control"))
+table2AllsNP<<-print(table2AllsNP,smd= TRUE)
+
+
+#GLM with Covariate Analysis
+
+d.AllsNP1<-na.omit(d.AllsNP[c("tissueid","PTC", "DB", "QUI", "SUC", "NaCl", "water", "DB_combo_prop", "QUI_combo_prop", "PTC_combo_prop", "snot22","control", "age", "sex", "TAS2R38", "EverSmoker", "asthma")])
+#loop
+results_lm_sNP <- data.frame()
+results_lm_sNPphc <- data.frame()
+varlist <- names(d.AllsNP1)[2:11]
+for(var in varlist){
+  # dynamically generate formula
+  fmla <- as.formula(paste0(var, "~control+age+sex+EverSmoker+asthma"))
+  # fit glm model
+  fit <- aov(lm(fmla, d.AllsNP))
+  summaryw <- summary(lm(fmla, d.AllsNP))
+  fdendf.w <- summaryw$fstatistic[[3]]
+  results <- data.frame(tidy(fit),fdendf.w)
+  beta<-data.frame(tidy(lm(fmla, d.AllsNP))[2:6,2:5])
+  beta[nrow(beta)+1,]<-NA
+  results<-bind_cols(results, beta)
+  results<-bind_cols(results, eta_squared(fit))
+  results_lm_sNP <- rbind(results_lm_sNP, results)
+  
+  lsmeans = lsmeans::lsmeans  ### Uses the lsmeans function
+                            ###  from the lsmeans package,
+                            ###  not from the lmerTest 
+  leastsquarea = lsmeans(fit,
+                      pairwise ~ control,
+                      adjust="tukey", data=d.AllsNP)
+  phc<-tidy(leastsquarea$contrasts)
+  results_lm_sNPphc<-rbind(results_lm_sNPphc, phc)
+}
+
+results_lm_sNP$Compound<-c("PTC","PTC","PTC","PTC","PTC","PTC", "DB","DB","DB","DB","DB","DB","Quinine","Quinine","Quinine","Quinine","Quinine","Quinine", "Sucrose","Sucrose","Sucrose","Sucrose","Sucrose","Sucrose","NaCl", "NaCl","NaCl","NaCl","NaCl","NaCl","H2O","H2O","H2O","H2O","H2O","H2O","DB.Combo","DB.Combo","DB.Combo","DB.Combo","DB.Combo","DB.Combo","QU.Combo","QU.Combo","QU.Combo","QU.Combo","QU.Combo","QU.Combo","PTC.Combo","PTC.Combo","PTC.Combo","PTC.Combo","PTC.Combo","PTC.Combo","SNOT-22","SNOT-22","SNOT-22","SNOT-22","SNOT-22","SNOT-22")
+
+
+results_lm_sNPphc$Compound<-c("PTC", "DB", "Quinine", "Sucrose", "NaCl", "H2O", "DB.Combo", "QU.Combo", "PTC.Combo", "SNOT-22")
+
+
+
+##AllwNP
+table1AllwNP<-CreateTableOne(vars=baseline, data=d.AllwNP, factorVars=catVars, strata=c("control"))
+table1AllwNP<-print(table1AllwNP, exact=catVars, smd= TRUE)
+
+table2AllwNP<-CreateTableOne(vars=taste, data=d.AllwNP, strata=c("control"))
+table2AllwNP<<-print(table2AllwNP,smd= TRUE)
+
+
+### Approach #1: Covariate Analysis
+d.AllwNP1<-na.omit(d.AllwNP[c("tissueid","PTC", "DB", "QUI", "SUC", "NaCl", "water", "DB_combo_prop", "QUI_combo_prop", "PTC_combo_prop", "snot22","control", "age", "sex", "TAS2R38", "EverSmoker", "asthma")])
+
+#loop
+results_lm_wNP <- data.frame()
+results_lm_wNPphc <- data.frame()
+varlist <- names(d.AllwNP1)[2:11]
+for(var in varlist){
+  # dynamically generate formula
+  fmla <- as.formula(paste0(var, "~control+age+sex+EverSmoker+asthma"))
+  # fit glm model
+  fit <- aov(lm(fmla, d.AllwNP))
+  summaryw <- summary(lm(fmla, d.AllwNP))
+  fdendf.w <- summaryw$fstatistic[[3]]
+  results <- data.frame(tidy(fit),fdendf.w)
+  beta<-data.frame(tidy(lm(fmla, d.AllwNP))[2:6,2:5])
+  beta[nrow(beta)+1,]<-NA
+  results<-bind_cols(results, beta)
+  results<-bind_cols(results, eta_squared(fit))
+  results_lm_wNP <- rbind(results_lm_wNP, results)
+  
+  lsmeans = lsmeans::lsmeans  ### Uses the lsmeans function
+                            ###  from the lsmeans package,
+                            ###  not from the lmerTest 
+  leastsquarea = lsmeans(fit,
+                      pairwise ~ control,
+                      adjust="tukey", data=d.AllwNP)
+  phc<-tidy(leastsquarea$contrasts)
+  results_lm_wNPphc<-rbind(results_lm_wNPphc, phc)
+}
+
+results_lm_wNP$Compound<-c("PTC","PTC","PTC","PTC","PTC","PTC", "DB","DB","DB","DB","DB","DB", "Quinine","Quinine","Quinine","Quinine","Quinine","Quinine", "Sucrose","Sucrose","Sucrose","Sucrose","Sucrose","Sucrose","NaCl", "NaCl","NaCl","NaCl","NaCl","NaCl","H2O", "H2O","H2O","H2O","H2O","H2O","DB.Combo","DB.Combo","DB.Combo","DB.Combo","DB.Combo","DB.Combo", "QU.Combo","QU.Combo","QU.Combo","QU.Combo","QU.Combo","QU.Combo","PTC.Combo","PTC.Combo","PTC.Combo","PTC.Combo","PTC.Combo","PTC.Combo","SNOT-22","SNOT-22","SNOT-22","SNOT-22","SNOT-22","SNOT-22")
+
+
+results_lm_wNPphc$Compound<-c("PTC", "DB", "Quinine", "Sucrose", "NaCl", "H2O", "DB.Combo", "QU.Combo", "PTC.Combo", "SNOT-22")
+
+```
+
+## (2.1) CRSsNP vs Controls
+
+### Summary of Data
+```{r, echo=FALSE}
+kable(table1AllsNP, caption="Demographic Data of CRSsNP vs Controls") %>%
+  row_spec(1, bold=T) %>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = F, fixed_thead = T, position="center")
+
+```
+
+```{r, echo=FALSE}
+kable(table2AllsNP, caption="Unadjusted Taste Test Scores of CRSsNP vs Controls") %>%
+  row_spec(1, bold=T) %>%
+  kable_styling(bootstrap_options = c("hover", "condensed", "striped"), full_width = F, fixed_thead = T, position="center")
+```
+
+###GLM with Covariate Analysis (CRSsNP vs Controls)
+```{r, echo=FALSE, warning=FALSE}
+results_lm_sNP<-results_lm_sNP[,c(14, 1:11,13)]
+results_lm_sNP %>%
+   format_model_table %>%
+  kable (digits=1,caption="GLM results:CRSsNP vs Controls", col.names=c("Compound","term","df","sumsq","meansq","F","p","dendf","beta", "std.err", "statistic",  "p.value","Eta_Sq")) %>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = F)%>%
+  row_spec(c(7,13,19,25, 31), bold = T, color = "white", background = "#D7261E") %>%
+  row_spec(c(1,26), bold = T, color = "grey", background = "#E0E0E0")
+```
+
+```{r echo=FALSE, warning=FALSE}
+results_lm_sNPphc<-results_lm_sNPphc[,c(8,1:7)]
+  kable (results_lm_sNPphc, caption="GLM CRSsNP posthoc case_control") %>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = F)
+```
+
+## (2.2) CRSwNP vs Controls
+
+### Summary of Data
+```{r, echo=FALSE}
+kable(table1AllwNP, caption="Demographic Data of CRSwNP vs Controls") %>%
+  row_spec(1, bold=T) %>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = F, fixed_thead = T, position="center")
+```
+
+```{r, echo=FALSE}
+kable(table2AllwNP, caption="Unadjusted Taste Test Scores of CRSwNP vs Controls") %>%
+  row_spec(1, bold=T) %>%
+  kable_styling(bootstrap_options = c("hover", "condensed", "striped"), full_width = F, fixed_thead = T, position="center")
+```
+
+###GLM with Covariate Analysis (CRSwNP vs Controls)
+```{r, echo=FALSE, warning=FALSE}
+results_lm_wNP<-results_lm_wNP[,c(14,1:11,13)]
+results_lm_wNP %>%
+   format_model_table %>%
+  kable (digits=1, col.names=c("Compound","term","df","sumsq","meansq","F","p","dendf", "beta", "std.err","statistic",  "p.value", "Eta_Sq")) %>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = F)%>%
+  row_spec(c(7,13,19,25,31), bold = T, color = "white", background = "#D7261E") %>%
+  row_spec(c(1,26), bold = T, color = "grey", background = "#E0E0E0")
+```
+
+```{r, echo=FALSE}
+results_lm_wNPphc<-results_lm_wNPphc[,c(8,1:7)]
+ kable (results_lm_wNPphc, caption="GLM CRSwNP posthoc case_control") %>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = F)
+```
+
+##(3) Stratifying by TAS2R38 Diplotype and Polyp Status for PTC
+In order to assess for differences in PTC taste scores we need to stratify our model by the three most common diplotypes - AVI/AVI, AVI/PAV, and PAV/PAV. First, we'll look at the classic linear model adjusting for age, sex, smoking and asmtha. 
+### GLM with Covariate Analysis
+
+```{r covariate_tas2r38, echo=FALSE, include=FALSE}
+#AVI/AVI
+mydata_avi<-mydata[which(mydata$Haplotype=="AVI/AVI"),]
+avi_lm<-tidy(aov(lm(PTC ~ control+age+sex+EverSmoker+asthma, mydata_avi)))
+beta<-data.frame(tidy(lm(PTC ~ control+age+sex+EverSmoker+asthma, mydata_avi))[2:6,2:5])
+beta[nrow(beta)+1,]<-NA
+avi_lm<-bind_cols(avi_lm, beta)
+avi_lm<-bind_cols(avi_lm, eta_squared(aov(lm(PTC ~ control+age+sex+EverSmoker+asthma, mydata_avi))))
+avi_lm2<-tidy(aov(lm(snot22 ~ control+age+sex+EverSmoker+asthma, mydata_avi)))
+
+#AVI/PAV +PAV/PAV
+mydata_pav<-mydata[which(mydata$Haplotype=="PAV/PAV" |mydata$Haplotype=="AVI/PAV" ),]
+pav_lm<-tidy(aov(lm(PTC ~ control+age+sex+EverSmoker+asthma, mydata_pav)))
+beta<-data.frame(tidy(lm(PTC ~ control+age+sex+EverSmoker+asthma, mydata_pav))[2:6,2:5])
+beta[nrow(beta)+1,]<-NA
+pav_lm<-bind_cols(pav_lm, beta)
+pav_lm<-bind_cols(pav_lm, eta_squared(aov(lm(PTC ~ control+age+sex+EverSmoker+asthma, mydata_pav))))
+
+pav_lm2<-tidy(aov(lm(snot22 ~ control+age+sex+EverSmoker+asthma, mydata_pav)))
+
+lsmeans = lsmeans::lsmeans  ### Uses the lsmeans function
+                            ###  from the lsmeans package,
+                            ###  not from the lmerTest 
+
+leastsquarea = lsmeans(aov(lm(PTC ~ control+age+sex+EverSmoker+asthma, mydata_pav)),
+                      pairwise ~ control,
+                      adjust="tukey", data=mydata_pav)
+PTC_pavphc<-tidy(leastsquarea$contrasts)
+
+
+#Tabulate
+adj_stratified<-rbind(avi_lm,  pav_lm)
+adj_stratified2<-rbind(avi_lm2,  pav_lm2)
+
+
+adj_stratified$Haplotype<-c("PAV-", "PAV-","PAV-","PAV-","PAV-","PAV-", "PAV+", "PAV+","PAV+","PAV+","PAV+","PAV+")
+adj_stratified2$Haplotype<-c("PAV-", "PAV-","PAV-","PAV-","PAV-", "PAV-", "PAV+", "PAV+","PAV+","PAV+","PAV+","PAV+")
+```
+
+###CRS vs Controls
+```{r, echo=FALSE}
+adj_stratified<-adj_stratified[c(13,1:10,12)]
+  kable (adj_stratified, caption="GLM CRS+Haplotype, PTC") %>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = F)%>%
+  row_spec(c(1,7), bold = T, color = "white", background = "#D7261E")
+```
+
+
+```{r, echo=FALSE}
+  kable (PTC_pavphc, caption="GLM CRS+pav+posthoc, PTC") %>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = F)
+```
+
+
+```{r, echo=FALSE}
+adj_stratified2<-adj_stratified2[,c(7, 1:6)]
+kable(adj_stratified2, caption="GLM CRS+Haplotype, SNOT22")%>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = F)
+```
+
+
+### CRS vs Controls (3 levels)
+```{r covariate_tas2r38+3levels, echo=FALSE, include=FALSE}
+#AVI/AVI
+mydata_avi<-mydata[which(mydata$Haplotype=="AVI/AVI"),]%>%
+  mutate(control=ifelse(control=="TRUE", "CNTR", ifelse(control=="FALSE"& polyps==0, "CRSsNP", "CRSwNP")))
+avi_lm<-tidy(aov(lm(PTC ~ control+age+sex+EverSmoker+asthma, mydata_avi)))
+beta<-data.frame(tidy(lm(PTC ~ control+age+sex+EverSmoker+asthma, mydata_avi))[2:6,2:5])
+beta[nrow(beta)+1,]<-NA
+avi_lm<-bind_cols(avi_lm, beta)
+avi_lm<-bind_cols(avi_lm, eta_squared(aov(lm(PTC ~ control+age+sex+EverSmoker+asthma, mydata_avi))))
+avi_lm2<-tidy(aov(lm(snot22 ~ control+age+sex+EverSmoker+asthma, mydata_avi)))
+
+#AVI/PAV +PAV/PAV
+mydata_pav<-mydata[which(mydata$Haplotype=="PAV/PAV" |mydata$Haplotype=="AVI/PAV" ),]%>%
+  mutate(control=ifelse(control=="TRUE", "CNTR", ifelse(control=="FALSE"& polyps==0, "CRSsNP", "CRSwNP")))
+pav_lm<-tidy(aov(lm(PTC ~ control+age+sex+EverSmoker+asthma, mydata_pav)))
+beta<-data.frame(tidy(lm(PTC ~ control+age+sex+EverSmoker+asthma, mydata_pav))[2:6,2:5])
+beta[nrow(beta)+1,]<-NA
+pav_lm<-bind_cols(pav_lm, beta)
+pav_lm<-bind_cols(pav_lm, eta_squared(aov(lm(PTC ~ control+age+sex+EverSmoker+asthma, mydata_pav))))
+
+pav_lm2<-tidy(aov(lm(snot22 ~ control+age+sex+EverSmoker+asthma, mydata_pav)))
+
+lsmeans = lsmeans::lsmeans  ### Uses the lsmeans function
+                            ###  from the lsmeans package,
+                            ###  not from the lmerTest 
+
+leastsquarea = lsmeans(aov(lm(PTC ~ control+age+sex+EverSmoker+asthma, mydata_pav)),
+                      pairwise ~ control,
+                      adjust="tukey", data=mydata_pav)
+PTC_pavphc<-tidy(leastsquarea$contrasts)
+
+
+#Tabulate
+adj_stratified<-rbind(avi_lm,  pav_lm)
+adj_stratified2<-rbind(avi_lm2,  pav_lm2)
+
+
+adj_stratified$Haplotype<-c("PAV-", "PAV-","PAV-","PAV-","PAV-","PAV-", "PAV+", "PAV+","PAV+","PAV+","PAV+","PAV+")
+adj_stratified2$Haplotype<-c("PAV-", "PAV-","PAV-","PAV-","PAV-", "PAV-", "PAV+", "PAV+","PAV+","PAV+","PAV+","PAV+")
+```
+
+###CRS vs Controls
+```{r, echo=FALSE}
+adj_stratified<-adj_stratified[c(13,1:10,12)]
+  kable (adj_stratified, caption="GLM CRS+Haplotype+3levels, PTC") %>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = F)%>%
+  row_spec(c(1,7), bold = T, color = "white", background = "#D7261E")
+```
+```{r, echo=FALSE}
+  kable (PTC_pavphc, caption="GLM CRS+3levels pav+ _posthoc, PTC") %>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = F)
+```
+
+
+### CRSsNP vs Controls
+```{r , include=FALSE, echo=FALSE}
+#CRSsNP
+#AVI/AVI
+d.AllsNP_avi<-d.AllsNP[which(d.AllsNP$TAS2R38=="AVI/AVI"),]
+avi_lm<-tidy(aov(lm(PTC ~ control+age+sex+EverSmoker+asthma, d.AllsNP_avi)))
+beta<-data.frame(tidy(lm(PTC ~ control+age+sex+EverSmoker+asthma, d.AllsNP_avi))[2:6,2:5])
+beta[nrow(beta)+1,]<-NA
+avi_lm<-bind_cols(avi_lm, beta)
+avi_lm<-bind_cols(avi_lm, eta_squared(aov(lm(PTC ~ control+age+sex+EverSmoker+asthma, d.AllsNP_avi))))
+
+#AVI/PAV, PAV/PAV
+d.AllsNP_pav<-d.AllsNP[which(d.AllsNP$TAS2R38=="PAV/PAV" |d.AllsNP$TAS2R38=="AVI/PAV"),]
+pav_lm<-tidy(aov(lm(PTC ~ control+age+sex+EverSmoker+asthma, d.AllsNP_pav)))
+beta<-data.frame(tidy(lm(PTC ~ control+age+sex+EverSmoker+asthma, d.AllsNP_pav))[2:6,2:5])
+beta[nrow(beta)+1,]<-NA
+pav_lm<-bind_cols(pav_lm, beta)
+pav_lm<-bind_cols(pav_lm, eta_squared(aov(lm(PTC ~ control+age+sex+EverSmoker+asthma, d.AllsNP_pav))))
+
+lsmeans = lsmeans::lsmeans  ### Uses the lsmeans function
+                            ###  from the lsmeans package,
+                            ###  not from the lmerTest 
+
+leastsquarea = lsmeans(aov(lm(PTC ~ control+age+sex+EverSmoker+asthma, d.AllsNP_pav)),
+                      pairwise ~ control,
+                      adjust="fisher", data=d.AllsNP_pav)
+CRSsNPPTC_pavphc<-tidy(leastsquarea$contrasts)
+
+#Tabulate
+CRSsNPadj_stratified<-rbind(avi_lm,  pav_lm)
+
+
+CRSsNPadj_stratified$Haplotype<-c("PAV-", "PAV-","PAV-","PAV-","PAV-", "PAV-", "PAV+","PAV+", "PAV+","PAV+","PAV+","PAV+")
+```
+
+
+```{r, echo=FALSE}
+CRSsNPadj_stratified<-CRSsNPadj_stratified[,c(13,1:10,12)]
+  kable (CRSsNPadj_stratified, caption="GLM CRSsNP Haplotype, PTC") %>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = F)%>%
+  row_spec(c(1,7), bold = T, color = "white", background = "#D7261E")
+```
+
+
+```{r, echo=FALSE}
+  kable (CRSsNPPTC_pavphc, caption="GLM CRSsNP pav+ posthoc, PTC") %>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = F)
+```
+
+
+### CRSwNP vs Controls
+```{r , include=FALSE, echo=FALSE}
+#AVI/AVI
+d.AllwNP_avi<-d.AllwNP[which(d.AllwNP$TAS2R38=="AVI/AVI"),]
+avi_lm<-tidy(aov(lm(PTC ~ control+age+sex+EverSmoker+asthma, d.AllwNP_avi)))
+beta<-data.frame(tidy(lm(PTC ~ control+age+sex+EverSmoker+asthma, d.AllwNP_avi))[2:6,2:5])
+beta[nrow(beta)+1,]<-NA
+avi_lm<-bind_cols(avi_lm, beta)
+avi_lm<-bind_cols(avi_lm, eta_squared(aov(lm(PTC ~ control+age+sex+EverSmoker+asthma, d.AllwNP_avi))))
+#AVI/PAV, PAV/PAV
+d.AllwNP_pav<-d.AllwNP[which(d.AllwNP$TAS2R38=="PAV/PAV" |d.AllwNP$TAS2R38=="AVI/PAV"),]
+
+pav_lm<-tidy(aov(lm(PTC ~ control+age+sex+EverSmoker+asthma, d.AllwNP_pav)))
+beta<-data.frame(tidy(lm(PTC ~ control+age+sex+EverSmoker+asthma, d.AllwNP_pav))[2:6,2:5])
+beta[nrow(beta)+1,]<-NA
+pav_lm<-bind_cols(pav_lm, beta)
+pav_lm<-bind_cols(pav_lm, eta_squared(aov(lm(PTC ~ control+age+sex+EverSmoker+asthma, d.AllwNP_pav))))
+
+lsmeans = lsmeans::lsmeans  ### Uses the lsmeans function
+                            ###  from the lsmeans package,
+                            ###  not from the lmerTest 
+
+leastsquarea = lsmeans(aov(lm(PTC ~ control+age+sex+EverSmoker+asthma, d.AllwNP_pav)),
+                      pairwise ~ control,
+                      adjust="tukey", data=d.AllwNP_pav)
+CRSwNPPTC_pavphc<-tidy(leastsquarea$contrasts)
+
+#Tabulate
+CRSwNPadj_stratified<-rbind(avi_lm,  pav_lm)
+
+
+CRSwNPadj_stratified$Haplotype<-c("PAV-", "PAV-","PAV-","PAV-","PAV-","PAV-", "PAV+", "PAV+", "PAV+","PAV+","PAV+","PAV+")
+
+```
+
+
+```{r, echo=FALSE}
+CRSwNPadj_stratified<-CRSwNPadj_stratified[,c(13,1:10,12)]
+  kable (CRSwNPadj_stratified, caption="GLM CRSwNP, Haplotype, PTC") %>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = F)%>%
+  row_spec(c(1,7), bold = T, color = "white", background = "#D7261E")
+```
+
+
+```{r, echo=FALSE}
+  kable (CRSwNPPTC_pavphc, caption="GLM CRSwNP pav+ _posthoc, PTC") %>%
+  kable_styling(bootstrap_options = c("hover", "condensed"), full_width = F)
+```
+
+## Boxplots
+
+```{r, include=FALSE, echo=FALSE}
+
+my_breaks <- function(x){ if (max(x) < 4) seq(2, 3.8, 0.6) else if (max(x) <7) seq(4.9, 7.5, 0.7) else if (max(x) < 8) seq(5.2, 7.6, 0.7) else seq(5.9,10,1.3)}
+
+my_limits<-function(x){ if (max(x) < 4) c(2, 3.8) else if (max(x) <7) c(4.9, 7.5) else if (max(x) < 8) c(5.2, 7.5) else c(5.9,10)}
+### Taste Scores of All CRS Cases vs. Controls (Plotting Predicted Values)
+
+mydata1<-na.omit(mydatadf[c("tissueid","PTC", "DB", "QUI", "SUC", "NaCl", "water", "DB_combo_prop", "QUI_combo_prop", "PTC_combo_prop", "snot22","control", "age", "sex", "TAS2R38", "EverSmoker", "asthma")])
+mydata1controls <-subset(mydata1,control=="TRUE")
+mydata1cases <-subset(mydata1,control=="FALSE")
+
+mydata1controls$PTC_pred<-predict(lm(PTC~age+sex+EverSmoker+asthma, data=mydata1controls))
+mydata1controls$DB_pred<-predict(lm(DB~age+sex+EverSmoker+asthma, data=mydata1controls))
+mydata1controls$QUI_pred<-predict(lm(QUI~age+sex+EverSmoker+asthma, data=mydata1controls))
+mydata1controls$SUC_pred<-predict(lm(SUC~age+sex+EverSmoker+asthma, data=mydata1controls))
+mydata1controls$NaCl_pred<-predict(lm(NaCl~age+sex+EverSmoker+asthma, data=mydata1controls))
+mydata1controls$water_pred<-predict(lm(water~age+sex+EverSmoker+asthma, data=mydata1controls))
+
+mydata1cases$PTC_pred<-predict(lm(PTC~age+sex+EverSmoker+asthma, data=mydata1cases))
+mydata1cases$DB_pred<-predict(lm(DB~age+sex+EverSmoker+asthma, data=mydata1cases))
+mydata1cases$QUI_pred<-predict(lm(QUI~age+sex+EverSmoker+asthma, data=mydata1cases))
+mydata1cases$SUC_pred<-predict(lm(SUC~age+sex+EverSmoker+asthma, data=mydata1cases))
+mydata1cases$NaCl_pred<-predict(lm(NaCl~age+sex+EverSmoker+asthma, data=mydata1cases))
+mydata1cases$water_pred<-predict(lm(water~age+sex+EverSmoker+asthma, data=mydata1cases))
+
+mydata1_results<-rbind(mydata1controls, mydata1cases)
+
+forgraph_sample <- mydata1_results %>% 
+  as_data_frame() %>%
+  dplyr::select(tissueid,control, DB_pred, QUI_pred, SUC_pred, NaCl_pred) %>%
+  reshape2::melt(id =c("tissueid", "control"))
+
+library(dplyr)
+forgraph_sample$control <- as.numeric(forgraph_sample$control)
+forgraph_sample <- forgraph_sample %>% mutate(control = dplyr::recode(control, "1" = "Control", "0" = "Case")) %>% mutate(variable = dplyr::recode(variable, "DB_pred"="Denatonium Benzoate", "QUI_pred"="Quinine", "SUC_pred"="Sucrose", "NaCl_pred"="NaCl"))
+
+ box_sample <- ggplot(forgraph_sample, aes(control, value)) +
+  geom_boxplot(outlier.colour="black", outlier.alpha =0.5,outlier.size = 0.2, notch=FALSE) + facet_wrap(~variable, ncol=1, scales = "free") +
+  xlab("") + ylab("Taste Rating Scores") + theme(panel.background = element_rect(fill = 'white', color = 'white'), axis.line=element_line(size = 0.5, color = "black"), strip.background = element_rect(fill ="white", color = "white"), strip.text.x = element_text(size = 12, face = "bold"), axis.title.y = element_text(size = 12, face = "bold"))
+
+
+ text_sample <- data.frame(
+   label = c("p<0.001", "p=0.002", "p=0.014", "p=0.649"),
+   variable   = c("Denatonium Benzoate", "Quinine", "Sucrose", "NaCl"),
+   x     = c(1.5,1.5,1.5,1.5),
+   y     = c(10,3.8,7.47,7.47)
+)
+p1_box_sample <- 
+  box_sample +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggtitle("CRS") +
+  geom_text(data  = text_sample, mapping = aes(x = x, y = y, label = label))+
+  scale_y_continuous(breaks = my_breaks,limits = my_limits)
+
+###
+library(dplyr)
+forgraph_sample <- forgraph_sample %>% mutate(control = dplyr::recode(control, "Control" = "Control", "Case" = "CRS")) %>% mutate(variable = dplyr::recode(variable, "DB_pred"="Denatonium Benzoate", "QUI_pred"="Quinine", "SUC_pred"="Sucrose", "NaCl_pred"="NaCl"))
+
+ box_sample <- ggplot(forgraph_sample, aes(control, value)) +
+  geom_boxplot(outlier.colour="black", outlier.alpha =0.5,outlier.size = 0.2, notch=FALSE) + facet_wrap(~variable, ncol=1, scales = "free") +
+  xlab("") + ylab("Taste Rating Scores") + theme(panel.background = element_rect(fill = 'white', color = 'white'), axis.line=element_line(size = 0.5, color = "black"), strip.background = element_rect(fill ="white", color = "white"), strip.text.x = element_text(size = 12, face = "bold"), axis.title.y = element_text(size = 12, face = "bold"))
+
+text_sample2 <- data.frame(
+   label = c("*", "*", "*", " "),
+   variable   = c("Denatonium Benzoate", "Quinine", "Sucrose", "NaCl"),
+   x     = c(2,2,2,2),
+   y     = c(8.9,3.3,6.8,7)
+) 
+ 
+p0_box_sample <- 
+  box_sample +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_text(data  = text_sample, mapping = aes(x = x, y = y, label = label))+
+  scale_y_continuous(breaks = my_breaks,limits = my_limits)+
+  geom_text(data  = text_sample2, mapping = aes(x = x, y = y, label = label), size=8)
+
+
+### Taste Scores of CRSwNP v. Controls  (Plotting Predicted Values)
+d.AllwNP<-na.omit(d.AllwNP[c("tissueid","PTC", "DB", "QUI", "SUC", "NaCl", "water", "DB_combo_prop", "QUI_combo_prop", "PTC_combo_prop", "snot22","control", "age", "sex", "TAS2R38", "EverSmoker", "asthma")])
+d.AllwNP_control <-subset(d.AllwNP,control=="TRUE")
+d.AllwNP_cases <-subset(d.AllwNP,control=="FALSE")
+
+d.AllwNP_control$PTC_pred<-predict(lm(PTC~age+sex+EverSmoker+asthma, data=d.AllwNP_control))
+d.AllwNP_control$DB_pred<-predict(lm(DB~age+sex+EverSmoker+asthma, data=d.AllwNP_control))
+d.AllwNP_control$QUI_pred<-predict(lm(QUI~age+sex+EverSmoker+asthma, data=d.AllwNP_control))
+d.AllwNP_control$SUC_pred<-predict(lm(SUC~age+sex+EverSmoker+asthma, data=d.AllwNP_control))
+d.AllwNP_control$NaCl_pred<-predict(lm(NaCl~age+sex+EverSmoker+asthma, data=d.AllwNP_control))
+d.AllwNP_control$water_pred<-predict(lm(water~age+sex+EverSmoker+asthma, data=d.AllwNP_control))
+
+d.AllwNP_cases$PTC_pred<-predict(lm(PTC~age+sex+EverSmoker+asthma, data=d.AllwNP_cases))
+d.AllwNP_cases$DB_pred<-predict(lm(DB~age+sex+EverSmoker+asthma, data=d.AllwNP_cases))
+d.AllwNP_cases$QUI_pred<-predict(lm(QUI~age+sex+EverSmoker+asthma, data=d.AllwNP_cases))
+d.AllwNP_cases$SUC_pred<-predict(lm(SUC~age+sex+EverSmoker+asthma, data=d.AllwNP_cases))
+d.AllwNP_cases$NaCl_pred<-predict(lm(NaCl~age+sex+EverSmoker+asthma, data=d.AllwNP_cases))
+d.AllwNP_cases$water_pred<-predict(lm(water~age+sex+EverSmoker+asthma, data=d.AllwNP_cases))
+
+AllwNP_all<-rbind(d.AllwNP_cases, d.AllwNP_control)
+
+forgraph_wNP <- AllwNP_all %>% 
+  as_data_frame() %>%
+  dplyr::select(tissueid,control, DB_pred,  QUI_pred, SUC_pred, NaCl_pred) %>%
+  reshape2::melt(id =c("tissueid", "control"))
+
+forgraph_wNP$control <- as.numeric(forgraph_wNP$control)
+forgraph_wNP <- forgraph_wNP %>% mutate(control = dplyr::recode(control, "1" = "Control", "0" = "Case")) %>% mutate(variable = dplyr::recode(variable, "DB_pred"="Denatonium Benzoate", "QUI_pred"="Quinine", "SUC_pred"="Sucrose", "NaCl_pred"="NaCl"))
+
+box_wNP <- ggplot(forgraph_wNP, aes(control, value)) +
+  geom_boxplot(outlier.colour="black", outlier.alpha =0.5,outlier.size = 0.2, notch=FALSE) +
+  facet_wrap(~variable, ncol=1, scales = "free") +
+  xlab("")+
+  ylab("Taste Rating Scores") +
+  theme(panel.background = element_rect(fill = 'white', color = 'white'), axis.line=element_line(size = 0.5, color = "black"), strip.background = element_rect(fill ="white", color = "white"), strip.text.x = element_text(size = 12, face = "bold"), axis.title.y = element_text(size = 12, face = "bold"))
+
+text_wNP <- data.frame(
+  label = c("p<0.001", "p<0.001", "p=0.006", "p=0.642"),
+  variable   = c("Denatonium Benzoate", "Quinine", "Sucrose", "NaCl"),
+  x     = c(1.5,1.5,1.5,1.5),
+  y     = c(10,3.8,7.47,7.47)
+)
+
+p1_box_wNP <- 
+  box_wNP + 
+  geom_text(data  = text_wNP, mapping = aes(x = x, y = y, label = label)) +
+  ggtitle("CRSwNP") + 
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_y_continuous(breaks = my_breaks,limits = my_limits)
+
+
+### Taste Scores of CRSsNP v. Controls  (Plotting Predicted Values)
+d.AllsNP<-na.omit(d.AllsNP[c("tissueid","PTC", "DB", "QUI", "SUC", "NaCl", "water", "DB_combo_prop", "QUI_combo_prop", "PTC_combo_prop", "snot22","control", "age", "sex", "TAS2R38", "EverSmoker", "asthma")])
+d.AllsNP_control <-subset(d.AllsNP,control=="TRUE")
+d.AllsNP_cases <-subset(d.AllsNP,control=="FALSE")
+
+d.AllsNP_control$PTC_pred<-predict(lm(PTC~age+sex+EverSmoker+asthma, data=d.AllsNP_control))
+d.AllsNP_control$DB_pred<-predict(lm(DB~age+sex+EverSmoker+asthma, data=d.AllsNP_control))
+d.AllsNP_control$QUI_pred<-predict(lm(QUI~age+sex+EverSmoker+asthma, data=d.AllsNP_control))
+d.AllsNP_control$SUC_pred<-predict(lm(SUC~age+sex+EverSmoker+asthma, data=d.AllsNP_control))
+d.AllsNP_control$NaCl_pred<-predict(lm(NaCl~age+sex+EverSmoker+asthma, data=d.AllsNP_control))
+d.AllsNP_control$water_pred<-predict(lm(water~age+sex+EverSmoker+asthma, data=d.AllsNP_control))
+
+d.AllsNP_cases$PTC_pred<-predict(lm(PTC~age+sex+EverSmoker+asthma, data=d.AllsNP_cases))
+d.AllsNP_cases$DB_pred<-predict(lm(DB~age+sex+EverSmoker+asthma, data=d.AllsNP_cases))
+d.AllsNP_cases$QUI_pred<-predict(lm(QUI~age+sex+EverSmoker+asthma, data=d.AllsNP_cases))
+d.AllsNP_cases$SUC_pred<-predict(lm(SUC~age+sex+EverSmoker+asthma, data=d.AllsNP_cases))
+d.AllsNP_cases$NaCl_pred<-predict(lm(NaCl~age+sex+EverSmoker+asthma, data=d.AllsNP_cases))
+d.AllsNP_cases$water_pred<-predict(lm(water~age+sex+EverSmoker+asthma, data=d.AllsNP_cases))
+
+AllsNP_all<-rbind(d.AllsNP_cases, d.AllsNP_control)
+
+forgraph_sNP <- AllsNP_all %>% 
+  as_data_frame() %>%
+  dplyr::select(tissueid,control, DB_pred,  QUI_pred, SUC_pred, NaCl_pred) %>%
+  reshape2::melt(id =c("tissueid", "control"))
+
+forgraph_sNP$control <- as.numeric(forgraph_sNP$control)
+forgraph_sNP <- forgraph_sNP %>% mutate(control = dplyr::recode(control, "1" = "Control", "0" = "Case")) %>% mutate(variable = dplyr::recode(variable, "DB_pred"="Denatonium Benzoate", "QUI_pred"="Quinine", "SUC_pred"="Sucrose", "NaCl_pred"="NaCl"))
+
+box_sNP <- ggplot(forgraph_sNP, aes(control, value)) +
+  geom_boxplot(outlier.colour="black", outlier.alpha =0.5,outlier.size = 0.2, notch=FALSE) +
+  facet_wrap(~variable, ncol=1, scales = "free") +
+  xlab("")+
+  ylab("Taste Rating Scores") +
+  theme(panel.background = element_rect(fill = 'white', color = 'white'), axis.line=element_line(size = 0.5, color = "black"), strip.background = element_rect(fill ="white", color = "white"), strip.text.x = element_text(size = 12, face = "bold"), axis.title.y = element_text(size = 12, face = "bold"))
+
+text_sNP <- data.frame(
+  label = c("p<0.001", "p=0.250", "p=0.231", "p=0.067"),
+  variable   = c("Denatonium Benzoate", "Quinine", "Sucrose", "NaCl"),
+  x     = c(1.5, 1.5,1.5,1.5),
+  y     = c(10,3.8,7.47,7.47)
+)
+
+p1_box_sNP <- 
+  box_sNP + 
+  geom_text(data  = text_sNP, mapping = aes(x = x, y = y, label = label)) +
+  ggtitle("CRSsNP") + 
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_y_continuous(breaks = my_breaks,limits = my_limits)
+
+
+```
+## Boxplots_option1
+```{r , include=FALSE, echo=FALSE}
+
+my_breaks <- function(x){ if (max(x) < 4) seq(2, 3.8, 0.6) else if (max(x) <7) seq(4.9, 7.5, 0.7) else if (max(x) < 8) seq(5.2, 7.6, 0.7) else seq(5.9,10,1.3)}
+
+my_limits<-function(x){ if (max(x) < 4) c(2, 3.8) else if (max(x) <7) c(4.9, 7.5) else if (max(x) < 8) c(5.2, 7.5) else c(5.9,10)}
+
+
+mydata1<-na.omit(mydatadf[c("tissueid","PTC", "DB", "QUI", "SUC", "NaCl", "water", "DB_combo_prop", "QUI_combo_prop", "PTC_combo_prop", "snot22","control", "age", "sex", "TAS2R38", "EverSmoker", "asthma", "polyps")])
+
+mydata1$control=ifelse(mydata1$control=="TRUE", "CNTR", ifelse(mydata1$control=="FALSE" & mydata1$polyps==0, "CRSsNP", "CRSwNP"))
+  
+mydata1controls <-subset(mydata1,control=="CNTR")
+mydata1CRSsNP <-subset(mydata1,control=="CRSsNP")
+mydata1CRSwNP <-subset(mydata1,control=="CRSwNP")
+
+mydata1controls$PTC_pred<-predict(lm(PTC~age+sex+EverSmoker+asthma, data=mydata1controls))
+mydata1controls$DB_pred<-predict(lm(DB~age+sex+EverSmoker+asthma, data=mydata1controls))
+mydata1controls$QUI_pred<-predict(lm(QUI~age+sex+EverSmoker+asthma, data=mydata1controls))
+mydata1controls$SUC_pred<-predict(lm(SUC~age+sex+EverSmoker+asthma, data=mydata1controls))
+mydata1controls$NaCl_pred<-predict(lm(NaCl~age+sex+EverSmoker+asthma, data=mydata1controls))
+mydata1controls$water_pred<-predict(lm(water~age+sex+EverSmoker+asthma, data=mydata1controls))
+
+mydata1CRSsNP$PTC_pred<-predict(lm(PTC~age+sex+EverSmoker+asthma, data=mydata1CRSsNP))
+mydata1CRSsNP$DB_pred<-predict(lm(DB~age+sex+EverSmoker+asthma, data=mydata1CRSsNP))
+mydata1CRSsNP$QUI_pred<-predict(lm(QUI~age+sex+EverSmoker+asthma, data=mydata1CRSsNP))
+mydata1CRSsNP$SUC_pred<-predict(lm(SUC~age+sex+EverSmoker+asthma, data=mydata1CRSsNP))
+mydata1CRSsNP$NaCl_pred<-predict(lm(NaCl~age+sex+EverSmoker+asthma, data=mydata1CRSsNP))
+mydata1CRSsNP$water_pred<-predict(lm(water~age+sex+EverSmoker+asthma, data=mydata1CRSsNP))
+
+mydata1CRSwNP$PTC_pred<-predict(lm(PTC~age+sex+EverSmoker+asthma, data=mydata1CRSwNP))
+mydata1CRSwNP$DB_pred<-predict(lm(DB~age+sex+EverSmoker+asthma, data=mydata1CRSwNP))
+mydata1CRSwNP$QUI_pred<-predict(lm(QUI~age+sex+EverSmoker+asthma, data=mydata1CRSwNP))
+mydata1CRSwNP$SUC_pred<-predict(lm(SUC~age+sex+EverSmoker+asthma, data=mydata1CRSwNP))
+mydata1CRSwNP$NaCl_pred<-predict(lm(NaCl~age+sex+EverSmoker+asthma, data=mydata1CRSwNP))
+mydata1CRSwNP$water_pred<-predict(lm(water~age+sex+EverSmoker+asthma, data=mydata1CRSwNP))
+
+mydata1_results<-rbind(mydata1controls, mydata1CRSsNP,mydata1CRSwNP)
+
+forgraph_sample <- mydata1_results %>% 
+  as_data_frame() %>%
+  dplyr::select(tissueid,control, DB_pred, QUI_pred, SUC_pred, NaCl_pred) %>%
+  reshape2::melt(id =c("tissueid", "control"))
+
+library(dplyr)
+forgraph_sample <- forgraph_sample %>% mutate(control = dplyr::recode(control, "CNTR" = "Control", "CRSsNP" = "CRSsNP", "CRSwNP"="CRSwNP")) %>% mutate(variable = dplyr::recode(variable, "DB_pred"="Denatonium Benzoate", "QUI_pred"="Quinine", "SUC_pred"="Sucrose", "NaCl_pred"="NaCl"))
+
+box_sample <- ggplot(forgraph_sample, aes(control, value)) +
+  geom_boxplot(outlier.colour="black", outlier.alpha =0.5,outlier.size = 0.2, notch=FALSE) + facet_wrap(~variable, ncol=1, scales = "free") +
+  xlab("") + ylab("Taste Rating Scores") + theme(panel.background = element_rect(fill = 'white', color = 'white'), axis.line=element_line(size = 0.5, color = "black"), strip.background = element_rect(fill ="white", color = "white"), strip.text.x = element_text(size = 12, face = "bold"), axis.title.y = element_text(size = 12, face = "bold"))
+
+
+ text_sample <- data.frame(
+   label = c("p<0.001", "p=0.001", "p=0.023", "p=0.065"),
+   variable   = c("Denatonium Benzoate", "Quinine", "Sucrose", "NaCl"),
+   x     = c(2,2,2,2),
+   y     = c(10,3.8,7.47,7.47)
+)
+ 
+ text_sample2 <- data.frame(
+   label = c("*", " ", "*", " "),
+   variable   = c("Denatonium Benzoate", "Quinine", "Sucrose", "NaCl"),
+   x     = c(3,3,3,3),
+   y     = c(8.8,3.8,7.3,7.47)
+)
+ 
+ text_sample3 <- data.frame(
+   label = c("*", " ", " ", " "),
+   variable   = c("Denatonium Benzoate", "Quinine", "Sucrose", "NaCl"),
+   x     = c(2,2,2,2),
+   y     = c(8.9,3.8,7.3,7.47)
+)
+ 
+p4_box_sample <- 
+  box_sample +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_text(data  = text_sample, mapping = aes(x = x, y = y, label = label))+
+  scale_y_continuous(breaks = my_breaks,limits = my_limits)+
+  geom_text(data  = text_sample2, mapping = aes(x = x, y = y, label = label), size=8)+
+  geom_text(data  = text_sample3, mapping = aes(x = x, y = y, label = label), size=8)
+
+```
+
+
+
+### Boxplots of Taste Scores of CRS, CRSwNP, CRSsNp v. Controls  (Plotting Predicted Values)
+```{r, echo=FALSE, fig.width = 12, fig.height = 18}
+box_crs<-ggarrange(p1_box_sample, p1_box_sNP,p1_box_wNP,ncol=3, labels=c("A", "B", "C")) 
+box_crs
+
+postscript(colormodel="cmyk")
+ggsave(filename ='Figure_1_v4.tif', box_crs,  width = 20, height = 28, units ="cm",dpi = 1200, device='tiff', limitsize = TRUE, compression = "lzw")
+dev.off()
+
+```
+### Boxplots of Taste Scores of CRs+CRSwNP+CRSsNp v. Controls  (Plotting Predicted Values(option1))
+```{r, echo=FALSE, fig.width =12, fig.height = 18}
+box_crs<-ggarrange(p0_box_sample, p4_box_sample, ncol=2, labels=c("A", "B"), 
+widths=c(1, 1.4)) 
+box_crs
+
+postscript(colormodel="cmyk")
+ggsave(filename ='Figure_1.tif', box_crs,  width = 17, height = 28, units ="cm",dpi = 1200, device='tiff', limitsize = TRUE, compression = "lzw")
+dev.off()
+
+```
+
+### Taste Scores of Polyp Status by TAS2R38 Diplotype [Figure_2_Tas2R38_v3]
+```{r, include=FALSE, echo=FALSE, warning=FALSE}
+#CRS
+m.data_gen<-mydata1%>%
+  select(tissueid, control, PTC,age,sex,EverSmoker,asthma,TAS2R38)%>%
+  drop_na()%>%
+  mutate(control=ifelse(control=="CNTR", "TRUE", "FALSE"))
+
+
+m.data_gen$T2R38<-m.data_gen$TAS2R38
+
+m.data_gen <-m.data_gen%>%
+  mutate(T2R38=dplyr::recode(T2R38,"AVI/AVI"="PAV-","AVI/PAV"="PAV+","PAV/PAV"="PAV+"))
+
+m.data_gen_neg <-subset(m.data_gen,T2R38=="PAV-")
+m.data_gen_pos <-subset(m.data_gen,T2R38=="PAV+")
+m.data_gen_neg1<-subset(m.data_gen_neg, control=="TRUE")
+m.data_gen_neg2<-subset(m.data_gen_neg, control=="FALSE")
+m.data_gen_neg1$PTC1 <- predict(lm(PTC ~age + sex + EverSmoker + asthma, subset(m.data_gen_neg, control=="TRUE")))
+m.data_gen_neg2$PTC1<-predict(lm(PTC ~ age + sex + EverSmoker+asthma,subset(m.data_gen_neg,control=="FALSE")))
+m.data_gen_neg<-rbind(m.data_gen_neg1,m.data_gen_neg2)
+m.data_gen_pos1<-subset(m.data_gen_pos, control=="TRUE")
+m.data_gen_pos2<-subset(m.data_gen_pos, control=="FALSE")
+m.data_gen_pos1$PTC1 <- predict(lm(PTC ~  age + sex + EverSmoker+asthma,subset(m.data_gen_pos, control=="TRUE")))
+m.data_gen_pos2$PTC1 <- predict(lm(PTC ~ age + sex + EverSmoker+asthma,subset(m.data_gen_pos, control=="FALSE")))
+m.data_gen_pos<-rbind(m.data_gen_pos1, m.data_gen_pos2)
+
+
+m.data_gen2 <- bind_rows(m.data_gen_neg,m.data_gen_pos)
+m.data_gen_fin <- data.frame(m.data_gen2) %>% dplyr::select(PTC1, PTC, control,tissueid, TAS2R38, T2R38)
+m.data_gen_fin["dat"] <- "CRS"
+
+
+#CRSwNP
+#matched_wnP_gen <- mydata(control ~ age + sex + EverSmoker, data = d.AllsNP, method= "genetic")
+#m.data_allwNP_gen<-match.data(matched_wnP_gen)
+m.data_allwNP_gen<-na.omit(d.AllwNP)
+m.data_allwNP_gen$T2R38<-m.data_allwNP_gen$TAS2R38
+
+m.data_allwNP_gen <-m.data_allwNP_gen%>%
+  mutate(T2R38=dplyr::recode(T2R38,"AVI/AVI"="PAV-","AVI/PAV"="PAV+","PAV/PAV"="PAV+"))
+
+m.data_allwNP_gen_neg <-subset(m.data_allwNP_gen,T2R38=="PAV-")
+m.data_allwNP_gen_pos <-subset(m.data_allwNP_gen,T2R38=="PAV+")
+m.data_allwNP_gen_neg1<-subset(m.data_allwNP_gen_neg, control=="TRUE")
+m.data_allwNP_gen_neg2<-subset(m.data_allwNP_gen_neg, control=="FALSE")
+m.data_allwNP_gen_neg1$PTC1 <- predict(lm(PTC ~ age + sex + EverSmoker+asthma,subset(m.data_allwNP_gen_neg, control=="TRUE")))
+m.data_allwNP_gen_neg2$PTC1 <- predict(lm(PTC ~  age + sex + EverSmoker+asthma,subset(m.data_allwNP_gen_neg, control=="FALSE")))
+m.data_allwNP_gen_neg<-rbind(m.data_allwNP_gen_neg1, m.data_allwNP_gen_neg2)
+m.data_allwNP_gen_pos1<-subset(m.data_allwNP_gen_pos, control=="TRUE")
+m.data_allwNP_gen_pos2<-subset(m.data_allwNP_gen_pos, control=="FALSE")
+m.data_allwNP_gen_pos1$PTC1 <- predict(lm(PTC ~ age + sex + EverSmoker+asthma,subset(m.data_allwNP_gen_pos, control=="TRUE")))
+m.data_allwNP_gen_pos2$PTC1 <- predict(lm(PTC ~ age + sex + EverSmoker+asthma,subset(m.data_allwNP_gen_pos, control=="FALSE")))
+m.data_allwNP_gen_pos<-rbind(m.data_allwNP_gen_pos1,m.data_allwNP_gen_pos2)
+                                       
+m.data_allwNP_gen2 <- bind_rows(m.data_allwNP_gen_neg,m.data_allwNP_gen_pos)
+m.data_allwNP_gen_fin <- data.frame(m.data_allwNP_gen2) %>% dplyr::select(PTC1, PTC, control,tissueid, TAS2R38, T2R38)
+m.data_allwNP_gen_fin["dat"] <- "CRSwNP"
+
+
+#CRSsNP
+#matched_sNP_gen <- mydata(control ~ age + sex + EverSmoker, data = d.AllsNP, method= "genetic")
+#m.data_allsNP_gen<-match.data(matched_sNP_gen)
+m.data_allsNP_gen<-na.omit(d.AllsNP)
+m.data_allsNP_gen$T2R38<-m.data_allsNP_gen$TAS2R38
+
+m.data_allsNP_gen <-m.data_allsNP_gen%>%
+  mutate(T2R38=dplyr::recode(T2R38,"AVI/AVI"="PAV-","AVI/PAV"="PAV+","PAV/PAV"="PAV+"))
+
+m.data_allsNP_gen_neg <-subset(m.data_allsNP_gen,T2R38=="PAV-")
+m.data_allsNP_gen_pos <-subset(m.data_allsNP_gen,T2R38=="PAV+")
+m.data_allsNP_gen_neg1<-subset(m.data_allsNP_gen_neg, control=="TRUE")
+m.data_allsNP_gen_neg2<-subset(m.data_allsNP_gen_neg, control=="FALSE")
+m.data_allsNP_gen_neg1$PTC1 <- predict(lm(PTC ~ age + sex + EverSmoker+asthma,subset(m.data_allsNP_gen_neg, control=="TRUE")))
+m.data_allsNP_gen_neg2$PTC1 <- predict(lm(PTC ~ age + sex + EverSmoker+asthma,subset(m.data_allsNP_gen_neg, control=="FALSE")))
+m.data_allsNP_gen_neg<-rbind(m.data_allsNP_gen_neg1, m.data_allsNP_gen_neg2)
+m.data_allsNP_gen_pos1<-subset(m.data_allsNP_gen_pos, control=="TRUE")
+m.data_allsNP_gen_pos2<-subset(m.data_allsNP_gen_pos, control=="FALSE")
+m.data_allsNP_gen_pos1$PTC1 <- predict(lm(PTC ~  age + sex + EverSmoker+asthma,subset(m.data_allsNP_gen_pos, control=="TRUE")))
+m.data_allsNP_gen_pos2$PTC1 <- predict(lm(PTC ~ age + sex + EverSmoker+asthma,subset(m.data_allsNP_gen_pos, control=="FALSE")))
+m.data_allsNP_gen_pos<-rbind(m.data_allsNP_gen_pos1, m.data_allsNP_gen_pos2)
+
+test <- tidy(lm(PTC~control+ age + sex + EverSmoker,m.data_allsNP_gen_pos))
+
+m.data_allsNP_gen2 <- bind_rows(m.data_allsNP_gen_neg,m.data_allsNP_gen_pos)
+m.data_allsNP_gen_fin <- data.frame(m.data_allsNP_gen2) %>% dplyr::select(PTC1, PTC, control,tissueid, TAS2R38, T2R38)
+m.data_allsNP_gen_fin["dat"] <- "CRSsNP"
+```
+
+
+```{r, echo=FALSE}
+#Graph all three genotypes by polyp status
+m.data_gen_fin$control<-as.logical(m.data_gen_fin$control)
+forgraph_all <- bind_rows(m.data_gen_fin, m.data_allwNP_gen_fin, m.data_allsNP_gen_fin)%>%
+  filter(T2R38 != "Other")
+forgraph_all$control <- as.numeric(forgraph_all$control)
+forgraph_all<- forgraph_all %>% mutate(control = dplyr::recode(control, "1"= "Control", "0" = "Case"))
+
+box_all <- ggplot(forgraph_all, aes(T2R38, PTC1)) + 
+      geom_boxplot(aes(color=control), outlier.color = "black", outlier.size = 0.2, outlier.alpha = 0.5, lwd=0.6) +
+      facet_wrap(~dat) + 
+      xlab("TAS2R38 diplotype")+
+      ylab("PTC Taste Score") +
+      ylim(0,10) + 
+      theme(axis.text.x = element_text(angle=0, hjust = 0.5, vjust=1))+
+      theme(panel.background =element_blank(), axis.line=element_line(size = 0.5, color = "black"), strip.background = element_blank(), strip.text.x = element_text(size = 12, face = "bold"), legend.position = c(0.065, 0.95), legend.background = element_blank(), legend.key=element_blank()) + scale_color_manual(name="", values=c("black", "grey"))
+
+text_forgraph <- data.frame(
+  label = c( "p=0.787","p<0.001", "p=0.278", "p=0.034", "p=0.628", "p=0.001"),
+  dat   = c("CRS", "CRS", "CRSsNP", "CRSsNP", "CRSwNP", "CRSwNP"),
+  x     = c(1,2,1,2,1,2),
+  y     = c(2,9,2,9,2,9)
+)
+
+text_forgraph2 <- data.frame(
+  label = c( "","*", "", "", "", ""),
+  dat   = c("CRS", "CRS", "CRSsNP", "CRSsNP", "CRSwNP", "CRSwNP"),
+  x     = c(1,1.81,1,2,1,2),
+  y     = c(2,8.1,2,9,2,9)
+)
+
+
+
+final_box_all <- 
+  box_all + 
+  geom_text(data  = text_forgraph, mapping = aes(x = x, y = y, label = label)) +
+  theme(plot.title = element_text(hjust = 0.5))+geom_text(data  = text_forgraph2, mapping = aes(x = x, y = y, label = label), size=6)
+
+
+```
+
+###New_version_Fig2
+
+```{r, warnings=FALSE, echo=FALSE, fig.width = 14, fig.height = 7}
+#final_box_all
+
+final_box_all
+
+postscript(colormodel="cmyk")
+ggsave(filename ='Figure_2_v4.tif', final_box_all,  width = 20, height = 8, units ="cm",dpi = 1200, device='tiff', limitsize = TRUE, compression = "lzw")
+dev.off()
+```
+
+
+```{r, echo=FALSE}
+m.data_gen_fin<-m.data_gen_fin%>%
+  filter(T2R38 != "Other")
+m.data_gen_fin$control<-as.character(m.data_gen_fin$control)
+m.data_gen_fin<- m.data_gen_fin %>% mutate(control = dplyr::recode(control, "TRUE" = "Control", "FALSE" = "CRS"))
+
+box_all <- ggplot(m.data_gen_fin, aes(T2R38, PTC1)) + 
+      geom_boxplot(aes(color=control), outlier.color = "black", outlier.size = 0.2, outlier.alpha = 0.5, lwd=0.6) +
+      xlab("TAS2R38 diplotype")+
+      ylab("PTC Taste Score") +
+      ylim(0,10) + 
+      theme(axis.text.x = element_text(angle=0, hjust = 0.5, vjust=1))+
+      theme(panel.background =element_blank(), axis.line=element_line(size = 0.5, color = "black"), strip.background = element_blank(), strip.text.x = element_text(size = 12, face = "bold"), legend.position = c(0.2, 0.95), legend.background = element_blank(), legend.key=element_blank()) + scale_color_manual(name="", values=c("grey", "black"))
+
+text_forgraph <- data.frame(
+  label = c( "p=0.787","p<0.001"),
+  dat   = c("CRS", "CRS"),
+  x     = c(1,2),
+  y     = c(2,9)
+)
+
+text_forgraph2 <- data.frame(
+  label = c( "","*"),
+  dat   = c("CRS", "CRS"),
+  x     = c(1,2.19),
+  y     = c(2,8.1)
+)
+
+
+final_box_all <- 
+  box_all + 
+  geom_text(data  = text_forgraph, mapping = aes(x = x, y = y, label = label)) +
+  theme(plot.title = element_text(hjust = 0.5))+geom_text(data  = text_forgraph2, mapping = aes(x = x, y = y, label = label), size=6)
+
+### Fig2B
+forgraph_all <- bind_rows(m.data_allwNP_gen_fin, m.data_allsNP_gen_fin)%>%
+  filter(T2R38 != "Other")
+forgraph_all$control <- as.numeric(forgraph_all$control)
+forgraph_all<- forgraph_all %>% mutate(control = dplyr::recode(control, "1" = "Control", "0" = "Case"))%>%
+  mutate(control=ifelse(control=="Case" & dat=="CRSsNP", "CRSsNP", ifelse(
+   control=="Case" & dat=="CRSwNP", "CRSwNP", "Control")))
+
+box_all2 <- ggplot(forgraph_all, aes(T2R38, PTC1)) + 
+      geom_boxplot(aes(color=control), outlier.color = "black", outlier.size = 0.2, outlier.alpha = 0.5, lwd=0.6) +
+      xlab("TAS2R38 diplotype")+
+      ylab("PTC Taste Score") +
+      ylim(0,10) + 
+      theme(axis.text.x = element_text(angle=0, hjust = 0.5, vjust=1))+
+      theme(panel.background =element_blank(), axis.line=element_line(size = 0.5, color = "black"), strip.background = element_blank(), strip.text.x = element_text(size = 12, face = "bold"), legend.position = c(0.2, 0.9), legend.background = element_blank(), legend.key=element_blank()) + scale_color_manual(name="", values=c("grey","dimgrey","black"))
+
+text_forgraph3 <- data.frame(
+  label = c( "p=0.231","p=0.003"),
+  dat   = c( "CRSsNP", "CRSwNP"),
+  x     = c(1,2),
+  y     = c(2,9)
+)
+
+
+final_box_all2 <- 
+  box_all2 + 
+  geom_text(data  = text_forgraph3, mapping = aes(x = x, y = y, label = label)) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+### Boxplots of Taste Scores of CRs+CRSwNP+CRSsNp v. Controls  (Plotting Predicted Values(option2))
+```{r, echo=FALSE, fig.width =12, fig.height = 7}
+box_tas2r38<-ggarrange(final_box_all, final_box_all2, ncol=2, labels=c("A", "B"),
+widths=c(1, 1.4)) 
+box_tas2r38
+
+postscript(colormodel="cmyk")
+ggsave(filename ='Figure_2.tif', box_tas2r38,  width = 17, height = 8, units ="cm",dpi = 1200, device='tiff', limitsize = TRUE, compression = "lzw")
+dev.off()
+
+```
+
