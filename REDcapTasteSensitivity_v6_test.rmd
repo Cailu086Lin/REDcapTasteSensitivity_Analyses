@@ -1577,6 +1577,7 @@ table2<-CreateTableOne(vars=taste, data=mydatadf, strata=c("control"))
 table2<-print(table2,smd= TRUE)
 
 mydatadf_cases<-mydatadf[which(mydatadf$control==FALSE),]
+mydatadf_cases$ars[is.na(mydatadf_cases$ars)]<-"0"
 tablecomicro<-CreateTableOne(vars=basecomicro, data=mydatadf_cases, factorVars=catVars)
 tablecomicro<-print(tablecomicro, exact=catVars, smd= TRUE)
 ```
